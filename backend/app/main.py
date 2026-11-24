@@ -9,5 +9,9 @@ app = FastAPI(title="h2open")
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    """Report that the service is up."""
+    """Report that the service is up.
+
+    Returns:
+        A status payload, always ``{"status": "ok"}``.
+    """
     return {"status": "ok"}

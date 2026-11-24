@@ -1,6 +1,8 @@
 [project]
-name = "backend"
+name = "h2open-backend"
 version = "0.1.0"
+description = "h2open backend API."
+authors = [{ name = "Orhan Yiğit Durmaz" }]
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.14"
 dependencies = [
@@ -11,6 +13,7 @@ dependencies = [
 dev = [
     "basedpyright>=1.40.2",
     "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
 ]
 
@@ -22,11 +25,12 @@ typeCheckingMode = "all"    # strictest mode: every rule enabled as an error
 target-version = "py314"
 
 [tool.ruff.lint]
+preview = true              # also enable rules ruff hasn't marked stable yet
 select = ["ALL"]
 ignore = [
-    "D203",    # conflicts with D211 (blank line before class docstring)
-    "D213",    # conflicts with D212 (multi-line summary position)
-    "COM812",  # conflicts with ruff format
+    "incorrect-blank-line-before-class",  # D203: conflicts with blank-line-before-class (D211)
+    "multi-line-summary-second-line",     # D213: conflicts with multi-line-summary-first-line (D212)
+    "missing-trailing-comma",             # COM812: conflicts with ruff format
 ]
 
 [tool.ruff.lint.flake8-copyright]
@@ -34,5 +38,35 @@ ignore = [
 notice-rgx = '\A# Copyright \d{4}(-\d{4})? Orhan Yiğit Durmaz\n# SPDX-License-Identifier: AGPL-3.0-or-later\n'
 min-file-size = 0
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"       # Args:, Returns:, Raises: sections
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8          # default 10
+
+[tool.ruff.lint.pylint]
+max-args = 4                # default 5
+max-branches = 8            # default 12
+max-returns = 4             # default 6
+max-statements = 30         # default 50
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]  # pytest uses bare assert
+"tests/**" = ["assert"]  # S101: pytest uses bare assert
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pytest]
+strict = true
+testpaths = ["tests"]
+addopts = ["-ra", "--cov"]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
