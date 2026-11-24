@@ -1,6 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi[standard]>=0.165.0",
@@ -26,8 +27,12 @@ ignore = [
     "D203",    # conflicts with D211 (blank line before class docstring)
     "D213",    # conflicts with D212 (multi-line summary position)
     "COM812",  # conflicts with ruff format
-    "CPY001",  # copyright headers: revisit once a license is chosen
 ]
+
+[tool.ruff.lint.flake8-copyright]
+# Every Python file must start with this exact two-line header.
+notice-rgx = '\A# Copyright \d{4}(-\d{4})? Orhan Yiğit Durmaz\n# SPDX-License-Identifier: AGPL-3.0-or-later\n'
+min-file-size = 0
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]  # pytest uses bare assert
