@@ -12,3 +12,22 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.6",
 ]
+
+[tool.basedpyright]
+pythonVersion = "3.14"
+typeCheckingMode = "all"    # strictest mode: every rule enabled as an error
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",    # conflicts with D211 (blank line before class docstring)
+    "D213",    # conflicts with D212 (multi-line summary position)
+    "COM812",  # conflicts with ruff format
+    "CPY001",  # copyright headers: revisit once a license is chosen
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # pytest uses bare assert
