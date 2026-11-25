@@ -138,8 +138,11 @@ def _order_view(order: Order) -> OrderView:
         override_reason=order.override_reason,
         exchange_id=order.exchange_id,
         created_at=order.created_at,
+        created_by=order.created_by,
         completed_at=order.completed_at,
+        completed_by=order.completed_by,
         cancelled_at=order.cancelled_at,
+        cancelled_by=order.cancelled_by,
         cancel_reason=order.cancel_reason,
     )
 
@@ -331,8 +334,10 @@ def _set_expected_returns(
 # Create, read, update, cancel
 
 
-async def create_order(session: AsyncSession, data: OrderCreate) -> OrderView:
-    """Take a new order.
+async def create_order(
+    session: AsyncSession, data: OrderCreate, actor_id: EntityId
+) -> OrderView:
+    """Take a new order, recording who took it.
 
     Returns:
         The open order.
@@ -348,6 +353,7 @@ async def create_order(session: AsyncSession, data: OrderCreate) -> OrderView:
         payment_method=data.payment_method,
         notes=data.notes,
         created_at=_now(),
+        created_by=actor_id,
     )
     if data.address_id is not None:
         _set_address(order, customer, data.address_id)
@@ -419,9 +425,9 @@ async def update_order(
 
 
 async def cancel_order(
-    session: AsyncSession, order_id: EntityId, data: OrderCancel
+    session: AsyncSession, order_id: EntityId, data: OrderCancel, actor_id: EntityId
 ) -> OrderView:
-    """Cancel an open order.
+    """Cancel an open order, recording who did it.
 
     Returns:
         The cancelled order.
@@ -430,6 +436,7 @@ async def cancel_order(
     order.status = OrderStatus.CANCELLED
     order.cancelled_at = _now()
     order.cancel_reason = data.reason
+    order.cancelled_by = actor_id
     return await _save(session, order)
 
 
@@ -488,7 +495,7 @@ async def _exchange_containers(
     session: AsyncSession,
     order: Order,
     returned: Counter[EntityId],
-    override_reason: str | None,
+    actor_id: EntityId,
 ) -> None:
     """Hand the container side of the order to the containers module."""
     delivered = _counts(_containers(order.lines, delivered=True))
@@ -501,9 +508,10 @@ async def _exchange_containers(
             customer_id=order.customer_id,
             delivered=delivered,
             returned=back,
-            override_reason=override_reason,
+            override_reason=order.override_reason,
             note=f"Order #{order.number}",
         ),
+        actor_id,
     )
     order.exchange_id = result.exchange_id
     for money in (result.deposit_charged, result.deposit_refunded):
@@ -518,9 +526,9 @@ def _amount(money: Money | None) -> Decimal | None:
 
 
 async def complete_order(
-    session: AsyncSession, order_id: EntityId, data: OrderCompletion
+    session: AsyncSession, order_id: EntityId, data: OrderCompletion, actor_id: EntityId
 ) -> OrderView:
-    """Record what was handed over and finalise the order.
+    """Record what was handed over and finalise the order, by ``actor_id``.
 
     Returns:
         The completed order with final totals.
@@ -543,8 +551,9 @@ async def complete_order(
     ):
         msg = "nothing was delivered or returned; cancel the order instead"
         raise DomainError(msg)
-    await _exchange_containers(session, order, returned, data.override_reason)
     order.override_reason = data.override_reason
+    await _exchange_containers(session, order, returned, actor_id)
+    order.completed_by = actor_id
     order.status = OrderStatus.COMPLETED
     order.completed_at = _now()
     return await _save(session, order)

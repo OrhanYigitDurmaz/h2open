@@ -9,6 +9,7 @@ at the start of every run, so the development database is never touched.
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -28,11 +29,26 @@ if TYPE_CHECKING:
 PYPROJECT = Path(__file__).parent.parent / "pyproject.toml"
 
 
+_PATCHES = pytest.MonkeyPatch()
+
+
 def pytest_configure() -> None:
-    """Point every database connection in this test run at the test database."""
+    """Use the test database, and cheap password hashing, for this run.
+
+    Real scrypt cost is ~0.1 s per hash. Each hash records its own cost,
+    so the cheaper one only applies to passwords hashed during tests.
+    """
+    _PATCHES.setattr(
+        "app.modules.identity._passwords.COST", SimpleNamespace(n=2**4, r=1, p=1)
+    )
     database = load_settings().postgres_db
     if not database.endswith("_test"):
         os.environ["POSTGRES_DB"] = f"{database}_test"
+
+
+def pytest_unconfigure() -> None:
+    """Undo the patches from :func:`pytest_configure`."""
+    _PATCHES.undo()
 
 
 def _recreate(admin: Engine, database: str) -> None:

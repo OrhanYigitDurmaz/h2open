@@ -4,19 +4,26 @@
 
 from http import HTTPStatus
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.core.db import SessionDep
 from app.core.ids import EntityId
 from app.modules.containers import _service
 from app.modules.containers._schemas import ExchangeCreate
 from app.modules.containers._views import BalanceView, ExchangeResult, MovementView
+from app.modules.identity import api as identity
 
-router = APIRouter(prefix="/containers", tags=["containers"])
+router = APIRouter(
+    prefix="/containers",
+    tags=["containers"],
+    dependencies=[Depends(identity.current_actor)],
+)
 
 
 @router.post("/exchanges", status_code=HTTPStatus.CREATED)
-async def exchange(session: SessionDep, data: ExchangeCreate) -> ExchangeResult:
+async def exchange(
+    session: SessionDep, actor: identity.CurrentActor, data: ExchangeCreate
+) -> ExchangeResult:
     """Record full containers delivered and empties returned in one visit.
 
     Returns:
@@ -24,7 +31,7 @@ async def exchange(session: SessionDep, data: ExchangeCreate) -> ExchangeResult:
         code ``override_required`` means the empties are a different type
         than the fulls; repeat with ``override_reason`` to accept them.
     """
-    return await _service.exchange(session, data)
+    return await _service.exchange(session, data, actor.id)
 
 
 @router.get("/customers/{customer_id}/balances")

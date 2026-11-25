@@ -52,6 +52,7 @@ def _movement_view(row: Movement) -> MovementView:
         balance_change=row.balance_change,
         unit_deposit=Money(amount=row.unit_deposit, currency=row.currency),
         occurred_at=row.occurred_at,
+        recorded_by=row.recorded_by,
         override_reason=row.override_reason,
         note=row.note,
     )
@@ -141,6 +142,7 @@ class _Context:
     plan: Plan
     types: Mapping[EntityId, catalog.ContainerTypeView]
     settings: company.SettingsView
+    actor_id: EntityId
 
 
 class _Ledger:
@@ -162,6 +164,7 @@ class _Ledger:
         self._policy: company.DepositRefundPolicy = (
             context.settings.deposit_refund_policy
         )
+        self._actor_id: EntityId = context.actor_id
         self._now: datetime = datetime.now(UTC)
 
     def apply(self, step: Step) -> None:
@@ -193,6 +196,7 @@ class _Ledger:
                 unit_deposit=unit.amount,
                 currency=unit.currency,
                 occurred_at=self._now,
+                recorded_by=self._actor_id,
                 override_reason=self._data.override_reason,
                 note=self._data.note,
             )
@@ -329,8 +333,10 @@ def _walk_in(context: _Context) -> ExchangeResult:
     )
 
 
-async def exchange(session: AsyncSession, data: ExchangeCreate) -> ExchangeResult:
-    """Record containers handed over in one visit.
+async def exchange(
+    session: AsyncSession, data: ExchangeCreate, actor_id: EntityId
+) -> ExchangeResult:
+    """Record containers handed over in one visit, by ``actor_id``.
 
     Returns:
         The movements and the deposit to charge or refund.
@@ -352,6 +358,7 @@ async def exchange(session: AsyncSession, data: ExchangeCreate) -> ExchangeResul
         plan=plan,
         types=await _container_types(session, data),
         settings=await company.get_settings(session),
+        actor_id=actor_id,
     )
     if data.customer_id is None:
         return _walk_in(context)

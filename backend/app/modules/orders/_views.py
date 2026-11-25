@@ -117,6 +117,11 @@ class OrderView(_View):
     override_reason: str | None
     exchange_id: EntityId | None
     created_at: datetime
+    created_by: EntityId
+    """The user who took the order."""
     completed_at: datetime | None
+    completed_by: EntityId | None
+    """The user who handed it over (usually the driver)."""
     cancelled_at: datetime | None
+    cancelled_by: EntityId | None
     cancel_reason: str | None

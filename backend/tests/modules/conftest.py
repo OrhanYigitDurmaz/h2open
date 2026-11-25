@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from app.core.app import create_app
 from app.core.events import EventBus
 from app.main import MODULES
+from app.modules.identity.api import Role
+from tests.modules.auth import bearer, login, make_user
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -19,11 +21,13 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def client(database: Database) -> Iterator[TestClient]:
-    """An HTTP client for an app with every module, on the test database.
+    """An HTTP client for the whole app, logged in as an admin.
 
     Yields:
         The client.
     """
     app = create_app(MODULES, event_bus=EventBus(), database=database)
     with TestClient(app) as client:
+        _ = make_user(database, "admin", {Role.ADMIN})
+        client.headers.update(bearer(login(client, "admin")))
         yield client

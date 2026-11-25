@@ -4,7 +4,7 @@
 
 from http import HTTPStatus
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.core.db import SessionDep
 from app.core.ids import EntityId
@@ -24,11 +24,18 @@ from app.modules.catalog._views import (
     PriceView,
     ProductView,
 )
+from app.modules.identity import api as identity
 
-router = APIRouter(prefix="/catalog", tags=["catalog"])
+router = APIRouter(
+    prefix="/catalog",
+    tags=["catalog"],
+    dependencies=[Depends(identity.current_actor)],
+)
+ADMIN = [Depends(identity.admin_actor)]
+"""Changing the catalog is for admins; everyone logged in can read it."""
 
 
-@router.post("/brands", status_code=HTTPStatus.CREATED)
+@router.post("/brands", status_code=HTTPStatus.CREATED, dependencies=ADMIN)
 async def create_brand(session: SessionDep, data: BrandCreate) -> BrandView:
     """Add a brand.
 
@@ -48,7 +55,7 @@ async def list_brands(session: SessionDep) -> list[BrandView]:
     return await _service.list_brands(session)
 
 
-@router.patch("/brands/{brand_id}")
+@router.patch("/brands/{brand_id}", dependencies=ADMIN)
 async def update_brand(
     session: SessionDep, brand_id: EntityId, data: BrandUpdate
 ) -> BrandView:
@@ -60,7 +67,7 @@ async def update_brand(
     return await _service.update_brand(session, brand_id, data)
 
 
-@router.post("/container-types", status_code=HTTPStatus.CREATED)
+@router.post("/container-types", status_code=HTTPStatus.CREATED, dependencies=ADMIN)
 async def create_container_type(
     session: SessionDep, data: ContainerTypeCreate
 ) -> ContainerTypeView:
@@ -82,7 +89,7 @@ async def list_container_types(session: SessionDep) -> list[ContainerTypeView]:
     return await _service.list_container_types(session)
 
 
-@router.patch("/container-types/{container_type_id}")
+@router.patch("/container-types/{container_type_id}", dependencies=ADMIN)
 async def update_container_type(
     session: SessionDep, container_type_id: EntityId, data: ContainerTypeUpdate
 ) -> ContainerTypeView:
@@ -95,7 +102,9 @@ async def update_container_type(
 
 
 @router.post(
-    "/container-types/{container_type_id}/deposits", status_code=HTTPStatus.CREATED
+    "/container-types/{container_type_id}/deposits",
+    status_code=HTTPStatus.CREATED,
+    dependencies=ADMIN,
 )
 async def add_deposit_price(
     session: SessionDep, container_type_id: EntityId, data: PriceCreate
@@ -120,7 +129,7 @@ async def deposit_history(
     return await _service.deposit_history(session, container_type_id)
 
 
-@router.post("/products", status_code=HTTPStatus.CREATED)
+@router.post("/products", status_code=HTTPStatus.CREATED, dependencies=ADMIN)
 async def create_product(session: SessionDep, data: ProductCreate) -> ProductView:
     """Add a product.
 
@@ -150,7 +159,7 @@ async def get_product(session: SessionDep, product_id: EntityId) -> ProductView:
     return await _service.get_product(session, product_id)
 
 
-@router.patch("/products/{product_id}")
+@router.patch("/products/{product_id}", dependencies=ADMIN)
 async def update_product(
     session: SessionDep, product_id: EntityId, data: ProductUpdate
 ) -> ProductView:
@@ -162,7 +171,9 @@ async def update_product(
     return await _service.update_product(session, product_id, data)
 
 
-@router.post("/products/{product_id}/prices", status_code=HTTPStatus.CREATED)
+@router.post(
+    "/products/{product_id}/prices", status_code=HTTPStatus.CREATED, dependencies=ADMIN
+)
 async def add_product_price(
     session: SessionDep, product_id: EntityId, data: PriceCreate
 ) -> PriceView:

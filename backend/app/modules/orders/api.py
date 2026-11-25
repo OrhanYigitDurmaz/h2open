@@ -56,7 +56,7 @@ async def get_order(session: AsyncSession, order_id: EntityId) -> OrderView:
 
 
 async def complete_order(
-    session: AsyncSession, order_id: EntityId, data: OrderCompletion
+    session: AsyncSession, order_id: EntityId, data: OrderCompletion, actor_id: EntityId
 ) -> OrderView:
     """Record what was handed over and finalise the order.
 
@@ -64,8 +64,9 @@ async def complete_order(
         session: The caller's database session.
         order_id: The order.
         data: What was actually delivered, returned and paid.
+        actor_id: The user handing it over (usually the driver).
 
     Returns:
         The completed order.
     """
-    return await _service.complete_order(session, order_id, data)
+    return await _service.complete_order(session, order_id, data, actor_id)

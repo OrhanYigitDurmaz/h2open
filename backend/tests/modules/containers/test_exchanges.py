@@ -24,6 +24,7 @@ from app.modules.containers.api import (
     MovementView,
 )
 from app.modules.customers.api import CustomerView
+from app.modules.identity.api import Actor
 from tests.modules.catalog.helpers import create_brand, create_container_type, try_
 
 if TYPE_CHECKING:
@@ -344,7 +345,8 @@ def test_movement_history(shop: Shop) -> None:
 
 
 def test_public_api(shop: Shop, database: Database) -> None:
-    """Orders and deliveries will call the containers api directly."""
+    """Orders and deliveries call the containers api directly, as a user."""
+    me = Actor.model_validate_json(shop.client.get("/auth/me").content).id
 
     async def deliver() -> list[BalanceView]:
         async with database.transaction() as session:
@@ -352,7 +354,8 @@ def test_public_api(shop: Shop, database: Database) -> None:
                 customer_id=shop.customer_id,
                 delivered=[ContainerCount(container_type_id=shop.carboy_a, quantity=1)],
             )
-            _ = await api.exchange(session, data)
+            result = await api.exchange(session, data, me)
+            assert result.movements[0].recorded_by == me
             return await api.balances(session, shop.customer_id)
 
     [balance] = asyncio.run(deliver())

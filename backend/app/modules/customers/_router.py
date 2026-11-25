@@ -5,7 +5,7 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.core.db import SessionDep
 from app.core.ids import EntityId
@@ -20,8 +20,13 @@ from app.modules.customers._schemas import (
     PhoneUpdate,
 )
 from app.modules.customers._views import CallerMatch, CustomerView
+from app.modules.identity import api as identity
 
-router = APIRouter(prefix="/customers", tags=["customers"])
+router = APIRouter(
+    prefix="/customers",
+    tags=["customers"],
+    dependencies=[Depends(identity.current_actor)],
+)
 
 
 @router.post("", status_code=HTTPStatus.CREATED)

@@ -14,6 +14,7 @@ from pydantic import BaseModel, TypeAdapter
 from app.core.ids import new_id
 from app.core.money import Money
 from app.modules.customers.api import CustomerView
+from app.modules.identity.api import Actor
 from app.modules.orders import api
 from app.modules.orders.api import OrderCompletion, OrderStatus, OrderView
 from tests.modules.catalog.helpers import (
@@ -499,10 +500,13 @@ def test_list_orders(shop: Shop) -> None:
 def test_public_api(shop: Shop, database: Database) -> None:
     """Deliveries will complete orders through the public api."""
     order = shop.delivery({shop.pack: 1})
+    me = Actor.model_validate_json(shop.client.get("/auth/me").content).id
+    assert order.created_by == me
 
     async def complete() -> OrderView:
         async with database.transaction() as session:
             _ = await api.get_order(session, order.id)
-            return await api.complete_order(session, order.id, OrderCompletion())
+            return await api.complete_order(session, order.id, OrderCompletion(), me)
 
-    assert asyncio.run(complete()).status is OrderStatus.COMPLETED
+    done = asyncio.run(complete())
+    assert (done.status, done.completed_by) == (OrderStatus.COMPLETED, me)

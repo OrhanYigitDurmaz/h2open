@@ -10,9 +10,17 @@ from app.modules.catalog.module import MODULE as CATALOG
 from app.modules.company.module import MODULE as COMPANY
 from app.modules.containers.module import MODULE as CONTAINERS
 from app.modules.customers.module import MODULE as CUSTOMERS
+from app.modules.identity.module import MODULE as IDENTITY
 from app.modules.orders.module import MODULE as ORDERS
 
-MODULES: tuple[Module, ...] = (CATALOG, COMPANY, CUSTOMERS, CONTAINERS, ORDERS)
+MODULES: tuple[Module, ...] = (
+    IDENTITY,
+    CATALOG,
+    COMPANY,
+    CUSTOMERS,
+    CONTAINERS,
+    ORDERS,
+)
 
 event_bus = EventBus()
 database = Database.connect(load_settings().database_url)

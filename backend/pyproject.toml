@@ -51,6 +51,9 @@ runtime-evaluated-base-classes = [
     "pydantic_settings.BaseSettings",
     "sqlalchemy.orm.DeclarativeBase",
 ]
+# FastAPI dependency aliases (SessionDep) are read at runtime from the
+# signatures of dependency functions, which have no decorator to mark them.
+exempt-modules = ["typing", "typing_extensions", "app.core.db"]
 # FastAPI reads route signatures at runtime to build validation and OpenAPI.
 runtime-evaluated-decorators = [
     "fastapi.APIRouter.get",
@@ -97,9 +100,9 @@ skip_covered = false
 root_package = "app"
 
 [[tool.importlinter.contracts]]
-name = "Layers: main > modules > core"
+name = "Layers: main and cli > modules > core"
 type = "layers"
-layers = ["app.main", "app.modules", "app.core"]
+layers = ["app.main | app.cli", "app.modules", "app.core"]
 
 [[tool.importlinter.contracts]]
 name = "Module internals (files starting with _) stay private"

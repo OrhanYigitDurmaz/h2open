@@ -51,6 +51,8 @@ class MovementView(_View):
     unit_deposit: Money
     """Deposit per container: charged, refunded or moved."""
     occurred_at: datetime
+    recorded_by: EntityId
+    """The user who recorded the movement, including any override."""
     override_reason: str | None
     note: str | None
 

@@ -34,18 +34,21 @@ __all__ = [
 ]
 
 
-async def exchange(session: AsyncSession, data: ExchangeCreate) -> ExchangeResult:
+async def exchange(
+    session: AsyncSession, data: ExchangeCreate, actor_id: EntityId
+) -> ExchangeResult:
     """Record containers handed over in one visit.
 
     Args:
         session: The caller's database session; the movements are part of
             the caller's transaction.
         data: What was delivered and returned.
+        actor_id: The user recording it.
 
     Returns:
         The movements and the deposit to charge or refund.
     """
-    return await _service.exchange(session, data)
+    return await _service.exchange(session, data, actor_id)
 
 
 async def balances(session: AsyncSession, customer_id: EntityId) -> list[BalanceView]:

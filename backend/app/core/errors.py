@@ -7,11 +7,14 @@ independent of HTTP. :func:`domain_error_handler` maps them to responses.
 """
 
 from http import HTTPStatus
+from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
 from fastapi.responses import JSONResponse
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from fastapi import Request
 
 
@@ -20,6 +23,7 @@ class DomainError(Exception):
 
     status_code: ClassVar[HTTPStatus] = HTTPStatus.UNPROCESSABLE_CONTENT
     code: ClassVar[str] = "business_rule_violated"
+    headers: ClassVar[Mapping[str, str]] = MappingProxyType({})
 
 
 class NotFoundError(DomainError):
@@ -47,9 +51,25 @@ def domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
         A response with the error's status, a stable machine-readable
         ``code`` and a human-readable ``detail``.
     """
+    return error_response(exc)
+
+
+def error_response(exc: DomainError) -> JSONResponse:
+    """Build the response for a domain error without raising it.
+
+    For endpoints that must commit their transaction even though they
+    report an error, such as counting failed logins.
+
+    Args:
+        exc: The error to report.
+
+    Returns:
+        The same response :func:`domain_error_handler` would send.
+    """
     return JSONResponse(
         status_code=exc.status_code,
         content={"code": exc.code, "detail": str(exc)},
+        headers=dict(exc.headers),
     )
 
 
@@ -60,3 +80,20 @@ class OverrideRequiredError(ConflictError):
     """
 
     code: ClassVar[str] = "override_required"
+
+
+class UnauthenticatedError(DomainError):
+    """No valid login: missing, expired or revoked token, or wrong password."""
+
+    status_code: ClassVar[HTTPStatus] = HTTPStatus.UNAUTHORIZED
+    code: ClassVar[str] = "unauthenticated"
+    headers: ClassVar[Mapping[str, str]] = MappingProxyType(
+        {"WWW-Authenticate": "Bearer"}
+    )
+
+
+class PermissionDeniedError(DomainError):
+    """Logged in, but not allowed to do this."""
+
+    status_code: ClassVar[HTTPStatus] = HTTPStatus.FORBIDDEN
+    code: ClassVar[str] = "forbidden"

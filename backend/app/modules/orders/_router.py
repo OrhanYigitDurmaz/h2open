@@ -5,10 +5,11 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.core.db import SessionDep
 from app.core.ids import EntityId
+from app.modules.identity import api as identity
 from app.modules.orders import _service
 from app.modules.orders._schemas import (
     OrderCancel,
@@ -19,17 +20,23 @@ from app.modules.orders._schemas import (
 )
 from app.modules.orders._views import OrderView
 
-router = APIRouter(prefix="/orders", tags=["orders"])
+router = APIRouter(
+    prefix="/orders",
+    tags=["orders"],
+    dependencies=[Depends(identity.current_actor)],
+)
 
 
 @router.post("", status_code=HTTPStatus.CREATED)
-async def create_order(session: SessionDep, data: OrderCreate) -> OrderView:
+async def create_order(
+    session: SessionDep, actor: identity.CurrentActor, data: OrderCreate
+) -> OrderView:
     """Take a new order (phone or counter, delivery or pickup).
 
     Returns:
         The open order.
     """
-    return await _service.create_order(session, data)
+    return await _service.create_order(session, data, actor.id)
 
 
 @router.get("")
@@ -68,7 +75,10 @@ async def update_order(
 
 @router.post("/{order_id}/complete")
 async def complete_order(
-    session: SessionDep, order_id: EntityId, data: OrderCompletion
+    session: SessionDep,
+    actor: identity.CurrentActor,
+    order_id: EntityId,
+    data: OrderCompletion,
 ) -> OrderView:
     """Record what was handed over: final quantities, empties and payment.
 
@@ -77,16 +87,19 @@ async def complete_order(
         ``override_required`` means empties of another brand were returned;
         repeat with ``override_reason`` to accept them.
     """
-    return await _service.complete_order(session, order_id, data)
+    return await _service.complete_order(session, order_id, data, actor.id)
 
 
 @router.post("/{order_id}/cancel")
 async def cancel_order(
-    session: SessionDep, order_id: EntityId, data: OrderCancel
+    session: SessionDep,
+    actor: identity.CurrentActor,
+    order_id: EntityId,
+    data: OrderCancel,
 ) -> OrderView:
     """Cancel an open order.
 
     Returns:
         The cancelled order.
     """
-    return await _service.cancel_order(session, order_id, data)
+    return await _service.cancel_order(session, order_id, data, actor.id)

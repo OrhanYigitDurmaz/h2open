@@ -56,5 +56,7 @@ class Movement(Base):
     unit_deposit: Mapped[Decimal] = mapped_column(Numeric(14, 4))
     currency: Mapped[str] = mapped_column(String(3))
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    recorded_by: Mapped[UUID] = mapped_column()
+    """The user who recorded it (identity module)."""
     override_reason: Mapped[str | None] = mapped_column(String(500))
     note: Mapped[str | None] = mapped_column(String(500))
