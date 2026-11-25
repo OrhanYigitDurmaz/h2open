@@ -12,13 +12,21 @@ if TYPE_CHECKING:
 
     from app.modules.company._schemas import SettingsUpdate
 
-DEFAULTS = SettingsView(deposit_refund_policy=DepositRefundPolicy.PAID_AMOUNT)
+DEFAULTS = SettingsView(
+    deposit_refund_policy=DepositRefundPolicy.PAID_AMOUNT,
+    walk_in_sales_enabled=True,
+    walk_in_deposits_allowed=False,
+)
 
 
 def _view(row: Settings | None) -> SettingsView:
     if row is None:
         return DEFAULTS
-    return SettingsView(deposit_refund_policy=row.deposit_refund_policy)
+    return SettingsView(
+        deposit_refund_policy=row.deposit_refund_policy,
+        walk_in_sales_enabled=row.walk_in_sales_enabled,
+        walk_in_deposits_allowed=row.walk_in_deposits_allowed,
+    )
 
 
 async def get_settings(session: AsyncSession) -> SettingsView:
@@ -41,9 +49,15 @@ async def update_settings(session: AsyncSession, data: SettingsUpdate) -> Settin
         row = Settings(
             id=SETTINGS_ROW_ID,
             deposit_refund_policy=DEFAULTS.deposit_refund_policy,
+            walk_in_sales_enabled=DEFAULTS.walk_in_sales_enabled,
+            walk_in_deposits_allowed=DEFAULTS.walk_in_deposits_allowed,
         )
         session.add(row)
     if data.deposit_refund_policy is not None:
         row.deposit_refund_policy = data.deposit_refund_policy
+    if data.walk_in_sales_enabled is not None:
+        row.walk_in_sales_enabled = data.walk_in_sales_enabled
+    if data.walk_in_deposits_allowed is not None:
+        row.walk_in_deposits_allowed = data.walk_in_deposits_allowed
     await session.flush()
     return _view(row)

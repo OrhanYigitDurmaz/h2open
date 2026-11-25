@@ -8,6 +8,7 @@ carboy under the "paid amount" policy refunds the oldest, 150.
 """
 
 from collections import defaultdict, deque
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -19,7 +20,7 @@ from app.core.money import Money
 from app.modules.catalog import api as catalog
 from app.modules.company import api as company
 from app.modules.containers._models import Movement
-from app.modules.containers._planning import Step, plan_exchange
+from app.modules.containers._planning import Plan, Step, plan_exchange
 from app.modules.containers._views import (
     BalanceView,
     ContainerCount,
@@ -115,22 +116,52 @@ def _total(rows: Iterable[Movement], kind: MovementKind) -> Money | None:
     return total
 
 
+def _current_deposit(
+    types: Mapping[EntityId, catalog.ContainerTypeView], type_id: EntityId
+) -> Money:
+    """The deposit in effect now for a container type.
+
+    Returns:
+        The deposit.
+
+    Raises:
+        DomainError: The container type has no deposit price yet.
+    """
+    container_type = types[type_id]
+    if container_type.deposit is None:
+        msg = f"no deposit price is set for {container_type.name!r}"
+        raise DomainError(msg)
+    return container_type.deposit
+
+
+@dataclass(frozen=True, slots=True)
+class _Context:
+    """Everything an exchange is settled against."""
+
+    plan: Plan
+    types: Mapping[EntityId, catalog.ContainerTypeView]
+    settings: company.SettingsView
+
+
 class _Ledger:
     """Turns planned steps into ledger rows, updating the lots as it goes."""
 
     def __init__(
         self,
         data: ExchangeCreate,
+        customer_id: EntityId,
         lots: Lots,
-        types: Mapping[EntityId, catalog.ContainerTypeView],
-        policy: company.DepositRefundPolicy,
+        context: _Context,
     ) -> None:
         self.exchange_id: EntityId = new_id()
         self.rows: list[Movement] = []
         self._data: ExchangeCreate = data
+        self._customer_id: EntityId = customer_id
         self._lots: Lots = lots
-        self._types: Mapping[EntityId, catalog.ContainerTypeView] = types
-        self._policy: company.DepositRefundPolicy = policy
+        self._types: Mapping[EntityId, catalog.ContainerTypeView] = context.types
+        self._policy: company.DepositRefundPolicy = (
+            context.settings.deposit_refund_policy
+        )
         self._now: datetime = datetime.now(UTC)
 
     def apply(self, step: Step) -> None:
@@ -154,7 +185,7 @@ class _Ledger:
             Movement(
                 id=new_id(),
                 exchange_id=self.exchange_id,
-                customer_id=self._data.customer_id,
+                customer_id=self._customer_id,
                 container_type_id=type_id,
                 kind=kind,
                 quantity=count,
@@ -167,23 +198,8 @@ class _Ledger:
             )
         )
 
-    def _current_deposit(self, type_id: EntityId) -> Money:
-        """The deposit in effect now.
-
-        Returns:
-            The deposit.
-
-        Raises:
-            DomainError: The container type has no deposit price yet.
-        """
-        container_type = self._types[type_id]
-        if container_type.deposit is None:
-            msg = f"no deposit price is set for {container_type.name!r}"
-            raise DomainError(msg)
-        return container_type.deposit
-
     def _issue(self, step: Step) -> None:
-        deposit = self._current_deposit(step.container_type_id)
+        deposit = _current_deposit(self._types, step.container_type_id)
         self._record(MovementKind.ISSUE, step, deposit, step.quantity)
         self._lots[step.container_type_id].extend([deposit] * step.quantity)
 
@@ -197,7 +213,8 @@ class _Ledger:
             case company.DepositRefundPolicy.PAID_AMOUNT:
                 refunds = paid
             case company.DepositRefundPolicy.CURRENT_PRICE:
-                refunds = [self._current_deposit(step.container_type_id)] * len(paid)
+                current = _current_deposit(self._types, step.container_type_id)
+                refunds = [current] * len(paid)
             case _:  # DepositRefundPolicy.NONE, the only one left
                 refunds = [Money.zero(value.currency) for value in paid]
         for unit, count in _group(refunds):
@@ -267,6 +284,51 @@ async def _active_customer(session: AsyncSession, customer_id: EntityId) -> None
         raise DomainError(msg)
 
 
+def _swaps(plan: Plan) -> list[ContainerCount]:
+    return [
+        ContainerCount(container_type_id=step.container_type_id, quantity=step.quantity)
+        for step in plan.steps
+        if step.kind is None
+    ]
+
+
+def _walk_in(context: _Context) -> ExchangeResult:
+    """Settle an exchange for someone without a customer record.
+
+    Nothing is stored: there is no balance to keep. Deposits for new
+    containers are charged only if the company allows it.
+
+    Returns:
+        The deposit to charge.
+
+    Raises:
+        DomainError: The walk-in returns containers for a refund, or takes
+            new ones while walk-in deposits are not allowed.
+    """
+    charged: Money | None = None
+    for step in context.plan.steps:
+        if step.kind is MovementKind.RETURN:
+            msg = "walk-in customers cannot return containers for a deposit refund"
+            raise DomainError(msg)
+        if step.kind is MovementKind.ISSUE:
+            if not context.settings.walk_in_deposits_allowed:
+                msg = (
+                    "walk-in customers cannot take new containers;"
+                    " register them as a customer first"
+                )
+                raise DomainError(msg)
+            unit = _current_deposit(context.types, step.container_type_id)
+            deposit = unit * step.quantity
+            charged = deposit if charged is None else charged + deposit
+    return ExchangeResult(
+        exchange_id=new_id(),
+        swapped=_swaps(context.plan),
+        movements=[],
+        deposit_charged=charged,
+        deposit_refunded=None,
+    )
+
+
 async def exchange(session: AsyncSession, data: ExchangeCreate) -> ExchangeResult:
     """Record containers handed over in one visit.
 
@@ -277,7 +339,8 @@ async def exchange(session: AsyncSession, data: ExchangeCreate) -> ExchangeResul
         OverrideRequiredError: Empties of another type were returned and no
             override reason was given.
     """
-    await _active_customer(session, data.customer_id)
+    if data.customer_id is not None:
+        await _active_customer(session, data.customer_id)
     plan = plan_exchange(data.delivered_by_type(), data.returned_by_type())
     if plan.mismatched and data.override_reason is None:
         msg = (
@@ -285,26 +348,38 @@ async def exchange(session: AsyncSession, data: ExchangeCreate) -> ExchangeResul
             " delivered ones; send an override_reason to accept them anyway"
         )
         raise OverrideRequiredError(msg)
-    types = await _container_types(session, data)
-    await _lock(session, data.customer_id)
-    lots = await _lots(session, data.customer_id)
-    _check_holdings(lots, data.returned_by_type(), types)
+    context = _Context(
+        plan=plan,
+        types=await _container_types(session, data),
+        settings=await company.get_settings(session),
+    )
+    if data.customer_id is None:
+        return _walk_in(context)
+    return await _record(session, data, data.customer_id, context)
 
-    settings = await company.get_settings(session)
-    ledger = _Ledger(data, lots, types, settings.deposit_refund_policy)
-    for step in plan.steps:
+
+async def _record(
+    session: AsyncSession,
+    data: ExchangeCreate,
+    customer_id: EntityId,
+    context: _Context,
+) -> ExchangeResult:
+    """Record a registered customer's exchange in the ledger.
+
+    Returns:
+        The movements and the deposit to charge or refund.
+    """
+    await _lock(session, customer_id)
+    lots = await _lots(session, customer_id)
+    _check_holdings(lots, data.returned_by_type(), context.types)
+    ledger = _Ledger(data, customer_id, lots, context)
+    for step in context.plan.steps:
         ledger.apply(step)
     session.add_all(ledger.rows)
     await session.flush()
     return ExchangeResult(
         exchange_id=ledger.exchange_id,
-        swapped=[
-            ContainerCount(
-                container_type_id=step.container_type_id, quantity=step.quantity
-            )
-            for step in plan.steps
-            if step.kind is None
-        ],
+        swapped=_swaps(context.plan),
         movements=[_movement_view(row) for row in ledger.rows],
         deposit_charged=_total(ledger.rows, MovementKind.ISSUE),
         deposit_refunded=_total(ledger.rows, MovementKind.RETURN),

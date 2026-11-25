@@ -17,7 +17,8 @@ type Text = Annotated[
 class ExchangeCreate(BaseModel):
     """Containers handed over in one visit, delivery or counter sale."""
 
-    customer_id: EntityId
+    customer_id: EntityId | None
+    """``None`` for a walk-in: nothing is recorded in any balance."""
     delivered: list[ContainerCount] = []
     """Full containers the customer receives."""
     returned: list[ContainerCount] = []

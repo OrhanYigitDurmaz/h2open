@@ -1,0 +1,550 @@
+# Copyright 2026 Orhan Yiğit Durmaz
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Order logic. Private to this module."""
+
+from collections import Counter
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from app.core.errors import ConflictError, DomainError, NotFoundError
+from app.core.ids import new_id
+from app.core.money import Money
+from app.modules.catalog import api as catalog
+from app.modules.company import api as company
+from app.modules.containers import api as containers
+from app.modules.customers import api as customers
+from app.modules.orders._models import Order, OrderLine, OrderReturn
+from app.modules.orders._views import (
+    ContainerReturnView,
+    DeliveryAddressView,
+    Fulfilment,
+    OrderLineView,
+    OrderStatus,
+    OrderView,
+    PaymentMethod,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.core.ids import EntityId
+    from app.modules.orders._schemas import (
+        LineIn,
+        OrderCancel,
+        OrderCompletion,
+        OrderCreate,
+        OrderSearch,
+        OrderUpdate,
+    )
+
+HUNDRED = Decimal(100)
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _sum(values: Iterable[Money | None]) -> Money | None:
+    total: Money | None = None
+    for value in values:
+        if value is not None:
+            total = value if total is None else total + value
+    return total
+
+
+# Views
+
+
+def _line_view(line: OrderLine) -> OrderLineView:
+    quantity = (
+        line.ordered_quantity
+        if line.delivered_quantity is None
+        else line.delivered_quantity
+    )
+    total = (Money(amount=line.unit_price, currency=line.currency) * quantity).rounded()
+    vat = Money(
+        amount=total.amount * line.vat_rate / (HUNDRED + line.vat_rate),
+        currency=total.currency,
+    ).rounded()
+    return OrderLineView(
+        id=line.id,
+        product_id=line.product_id,
+        sku=line.sku,
+        name=line.name,
+        unit_price=Money(amount=line.unit_price, currency=line.currency),
+        vat_rate=line.vat_rate,
+        container_type_id=line.container_type_id,
+        container_quantity=line.container_quantity,
+        ordered_quantity=line.ordered_quantity,
+        delivered_quantity=line.delivered_quantity,
+        total=total,
+        vat=vat,
+    )
+
+
+def _deposit(order: Order, amount: Decimal | None) -> Money | None:
+    if amount is None or order.deposit_currency is None:
+        return None
+    return Money(amount=amount, currency=order.deposit_currency)
+
+
+def _address_view(order: Order) -> DeliveryAddressView | None:
+    if order.address is None:
+        return None
+    return DeliveryAddressView(
+        address_id=order.address_id,
+        address=order.address,
+        directions=order.directions,
+        latitude=order.latitude,
+        longitude=order.longitude,
+    )
+
+
+def _order_view(order: Order) -> OrderView:
+    lines = [_line_view(line) for line in order.lines]
+    goods = _sum(line.total for line in lines)
+    charged = _deposit(order, order.deposit_charged)
+    refunded = _deposit(order, order.deposit_refunded)
+    return OrderView(
+        id=order.id,
+        number=order.number,
+        customer_id=order.customer_id,
+        channel=order.channel,
+        fulfilment=order.fulfilment,
+        status=order.status,
+        payment_method=order.payment_method,
+        address=_address_view(order),
+        notes=order.notes,
+        lines=lines,
+        returns=[
+            ContainerReturnView(
+                container_type_id=row.container_type_id,
+                expected_quantity=row.expected_quantity,
+                returned_quantity=row.returned_quantity,
+            )
+            for row in order.returns
+        ],
+        goods_total=goods,
+        vat_total=_sum(line.vat for line in lines),
+        deposit_charged=charged,
+        deposit_refunded=refunded,
+        total=_sum([goods, charged, None if refunded is None else refunded * -1]),
+        override_reason=order.override_reason,
+        exchange_id=order.exchange_id,
+        created_at=order.created_at,
+        completed_at=order.completed_at,
+        cancelled_at=order.cancelled_at,
+        cancel_reason=order.cancel_reason,
+    )
+
+
+# Loading
+
+
+async def _load(session: AsyncSession, order_id: EntityId) -> Order:
+    """Load an order with its lines and returns, fresh from the database.
+
+    Returns:
+        The order.
+
+    Raises:
+        NotFoundError: No such order.
+    """
+    order = await session.scalar(
+        select(Order)
+        .where(Order.id == order_id)
+        .options(selectinload(Order.lines), selectinload(Order.returns))
+        .execution_options(populate_existing=True)
+    )
+    if order is None:
+        msg = f"order {order_id} not found"
+        raise NotFoundError(msg)
+    return order
+
+
+async def _load_open(session: AsyncSession, order_id: EntityId) -> Order:
+    """Load an order that can still change.
+
+    Returns:
+        The order.
+
+    Raises:
+        ConflictError: The order is already completed or cancelled.
+    """
+    order = await _load(session, order_id)
+    if order.status is not OrderStatus.OPEN:
+        msg = f"order #{order.number} is {order.status.value} and cannot change"
+        raise ConflictError(msg)
+    return order
+
+
+async def _save(session: AsyncSession, order: Order) -> OrderView:
+    await session.flush()
+    return _order_view(await _load(session, order.id))
+
+
+# Rules shared by create, update and complete
+
+
+async def _customer(
+    session: AsyncSession, customer_id: EntityId | None
+) -> customers.CustomerView | None:
+    """Check who the order is for.
+
+    Returns:
+        The customer, or ``None`` for a walk-in.
+
+    Raises:
+        DomainError: Walk-ins are disabled, or the customer is inactive.
+    """
+    if customer_id is None:
+        settings = await company.get_settings(session)
+        if not settings.walk_in_sales_enabled:
+            msg = "walk-in sales are disabled; choose or register a customer"
+            raise DomainError(msg)
+        return None
+    customer = await customers.get_customer(session, customer_id)
+    if not customer.active:
+        msg = f"customer {customer.name!r} is inactive"
+        raise DomainError(msg)
+    return customer
+
+
+def _check_payment(customer_id: EntityId | None, method: PaymentMethod) -> None:
+    """On-account sales need someone to send the bill to.
+
+    Raises:
+        DomainError: An on-account sale without a customer.
+    """
+    if customer_id is None and method is PaymentMethod.ON_ACCOUNT:
+        msg = "on-account (veresiye) sales need a registered customer"
+        raise DomainError(msg)
+
+
+def _set_address(
+    order: Order, customer: customers.CustomerView | None, address_id: EntityId
+) -> None:
+    """Copy one of the customer's addresses onto the order.
+
+    Raises:
+        NotFoundError: The customer has no such address.
+    """
+    addresses = [] if customer is None else customer.addresses
+    for address in addresses:
+        if address.id == address_id:
+            order.address_id = address.id
+            order.address = address.address
+            order.directions = address.directions
+            order.latitude = address.latitude
+            order.longitude = address.longitude
+            return
+    msg = f"the customer has no address {address_id}"
+    raise NotFoundError(msg)
+
+
+async def _new_line(
+    session: AsyncSession, product_id: EntityId, ordered: int, delivered: int | None
+) -> OrderLine:
+    """A line for a product at today's price.
+
+    Returns:
+        The line.
+
+    Raises:
+        DomainError: The product is inactive or has no price.
+    """
+    product = await catalog.get_product(session, product_id)
+    if not product.active or product.price is None:
+        msg = f"{product.name!r} is not for sale (inactive or no price)"
+        raise DomainError(msg)
+    return OrderLine(
+        id=new_id(),
+        product_id=product.id,
+        sku=product.sku,
+        name=product.name,
+        unit_price=product.price.amount,
+        currency=product.price.currency,
+        vat_rate=product.vat_rate,
+        container_type_id=None
+        if product.container is None
+        else product.container.container_type_id,
+        container_quantity=None
+        if product.container is None
+        else product.container.quantity,
+        ordered_quantity=ordered,
+        delivered_quantity=delivered,
+    )
+
+
+async def _set_lines(session: AsyncSession, order: Order, lines: list[LineIn]) -> None:
+    order.lines.clear()
+    for line in lines:
+        order.lines.append(
+            await _new_line(session, line.product_id, line.quantity, None)
+        )
+
+
+def _containers(lines: Iterable[OrderLine], *, delivered: bool) -> Counter[EntityId]:
+    """Returnable containers in the lines, by type.
+
+    Returns:
+        Containers per type, for ordered or delivered quantities.
+    """
+    counts: Counter[EntityId] = Counter()
+    for line in lines:
+        if line.container_type_id is not None and line.container_quantity:
+            quantity = line.delivered_quantity if delivered else line.ordered_quantity
+            counts[line.container_type_id] += (quantity or 0) * line.container_quantity
+    return counts
+
+
+def _set_expected_returns(
+    order: Order, explicit: list[containers.ContainerCount] | None
+) -> None:
+    expected: Mapping[EntityId, int] = (
+        _containers(order.lines, delivered=False)
+        if explicit is None
+        else {count.container_type_id: count.quantity for count in explicit}
+    )
+    # Update rows in place: deleting and re-inserting a type would clash
+    # with the one-row-per-type constraint, since inserts are flushed first.
+    remaining = {
+        type_id: quantity for type_id, quantity in expected.items() if quantity
+    }
+    for row in list(order.returns):
+        if row.container_type_id in remaining:
+            row.expected_quantity = remaining.pop(row.container_type_id)
+        else:
+            order.returns.remove(row)
+    order.returns.extend(
+        OrderReturn(id=new_id(), container_type_id=type_id, expected_quantity=quantity)
+        for type_id, quantity in sorted(remaining.items())
+    )
+
+
+# Create, read, update, cancel
+
+
+async def create_order(session: AsyncSession, data: OrderCreate) -> OrderView:
+    """Take a new order.
+
+    Returns:
+        The open order.
+    """
+    customer = await _customer(session, data.customer_id)
+    _check_payment(data.customer_id, data.payment_method)
+    order = Order(
+        id=new_id(),
+        customer_id=data.customer_id,
+        channel=data.channel,
+        fulfilment=data.fulfilment,
+        status=OrderStatus.OPEN,
+        payment_method=data.payment_method,
+        notes=data.notes,
+        created_at=_now(),
+    )
+    if data.address_id is not None:
+        _set_address(order, customer, data.address_id)
+    await _set_lines(session, order, data.lines)
+    _set_expected_returns(order, data.expected_returns)
+    session.add(order)
+    return await _save(session, order)
+
+
+async def get_order(session: AsyncSession, order_id: EntityId) -> OrderView:
+    """Look up one order.
+
+    Returns:
+        The order.
+    """
+    return _order_view(await _load(session, order_id))
+
+
+async def list_orders(session: AsyncSession, search: OrderSearch) -> list[OrderView]:
+    """List orders, newest first.
+
+    Returns:
+        Up to ``search.limit`` orders.
+    """
+    query = (
+        select(Order)
+        .options(selectinload(Order.lines), selectinload(Order.returns))
+        .order_by(Order.number.desc())
+        .limit(search.limit)
+    )
+    if search.status is not None:
+        query = query.where(Order.status == search.status)
+    if search.fulfilment is not None:
+        query = query.where(Order.fulfilment == search.fulfilment)
+    if search.customer_id is not None:
+        query = query.where(Order.customer_id == search.customer_id)
+    return [_order_view(order) for order in await session.scalars(query)]
+
+
+async def update_order(
+    session: AsyncSession, order_id: EntityId, data: OrderUpdate
+) -> OrderView:
+    """Change an open order.
+
+    Returns:
+        The updated order.
+
+    Raises:
+        DomainError: Pickup orders have no address to change.
+    """
+    order = await _load_open(session, order_id)
+    if data.lines is not None:
+        await _set_lines(session, order, data.lines)
+    if data.lines is not None or data.expected_returns is not None:
+        _set_expected_returns(order, data.expected_returns)
+    if data.payment_method is not None:
+        _check_payment(order.customer_id, data.payment_method)
+        order.payment_method = data.payment_method
+    if data.address_id is not None:
+        if order.fulfilment is not Fulfilment.DELIVERY:
+            msg = "pickup orders have no delivery address"
+            raise DomainError(msg)
+        _set_address(
+            order, await _customer(session, order.customer_id), data.address_id
+        )
+    if "notes" in data.model_fields_set:
+        order.notes = data.notes
+    return await _save(session, order)
+
+
+async def cancel_order(
+    session: AsyncSession, order_id: EntityId, data: OrderCancel
+) -> OrderView:
+    """Cancel an open order.
+
+    Returns:
+        The cancelled order.
+    """
+    order = await _load_open(session, order_id)
+    order.status = OrderStatus.CANCELLED
+    order.cancelled_at = _now()
+    order.cancel_reason = data.reason
+    return await _save(session, order)
+
+
+# Completion
+
+
+async def _apply_delivered(
+    session: AsyncSession, order: Order, lines: list[LineIn]
+) -> None:
+    """Record what was actually delivered; new products get today's price."""
+    delivered = {line.product_id: line.quantity for line in lines}
+    for line in order.lines:
+        line.delivered_quantity = delivered.pop(line.product_id, 0)
+    for product_id, quantity in delivered.items():
+        order.lines.append(await _new_line(session, product_id, 0, quantity))
+
+
+def _apply_returned(
+    order: Order, returned: list[containers.ContainerCount] | None
+) -> Counter[EntityId]:
+    """Record the empties that came back.
+
+    Returns:
+        Returned empties per container type.
+    """
+    actual: Counter[EntityId] = Counter(
+        {row.container_type_id: row.expected_quantity for row in order.returns}
+        if returned is None
+        else {count.container_type_id: count.quantity for count in returned}
+    )
+    for row in order.returns:
+        row.returned_quantity = actual[row.container_type_id]
+    expected = {row.container_type_id for row in order.returns}
+    order.returns.extend(
+        OrderReturn(
+            id=new_id(),
+            container_type_id=type_id,
+            expected_quantity=0,
+            returned_quantity=quantity,
+        )
+        for type_id, quantity in sorted(actual.items())
+        if type_id not in expected
+    )
+    return actual
+
+
+def _counts(counter: Counter[EntityId]) -> list[containers.ContainerCount]:
+    return [
+        containers.ContainerCount(container_type_id=type_id, quantity=quantity)
+        for type_id, quantity in sorted(counter.items())
+        if quantity
+    ]
+
+
+async def _exchange_containers(
+    session: AsyncSession,
+    order: Order,
+    returned: Counter[EntityId],
+    override_reason: str | None,
+) -> None:
+    """Hand the container side of the order to the containers module."""
+    delivered = _counts(_containers(order.lines, delivered=True))
+    back = _counts(returned)
+    if not delivered and not back:
+        return
+    result = await containers.exchange(
+        session,
+        containers.ExchangeCreate(
+            customer_id=order.customer_id,
+            delivered=delivered,
+            returned=back,
+            override_reason=override_reason,
+            note=f"Order #{order.number}",
+        ),
+    )
+    order.exchange_id = result.exchange_id
+    for money in (result.deposit_charged, result.deposit_refunded):
+        if money is not None:
+            order.deposit_currency = money.currency
+    order.deposit_charged = _amount(result.deposit_charged)
+    order.deposit_refunded = _amount(result.deposit_refunded)
+
+
+def _amount(money: Money | None) -> Decimal | None:
+    return None if money is None else money.amount
+
+
+async def complete_order(
+    session: AsyncSession, order_id: EntityId, data: OrderCompletion
+) -> OrderView:
+    """Record what was handed over and finalise the order.
+
+    Returns:
+        The completed order with final totals.
+
+    Raises:
+        DomainError: Nothing was delivered or returned.
+    """
+    order = await _load_open(session, order_id)
+    if data.payment_method is not None:
+        _check_payment(order.customer_id, data.payment_method)
+        order.payment_method = data.payment_method
+    if data.lines is None:
+        for line in order.lines:
+            line.delivered_quantity = line.ordered_quantity
+    else:
+        await _apply_delivered(session, order, data.lines)
+    returned = _apply_returned(order, data.returned)
+    if not any(line.delivered_quantity for line in order.lines) and not any(
+        returned.values()
+    ):
+        msg = "nothing was delivered or returned; cancel the order instead"
+        raise DomainError(msg)
+    await _exchange_containers(session, order, returned, data.override_reason)
+    order.override_reason = data.override_reason
+    order.status = OrderStatus.COMPLETED
+    order.completed_at = _now()
+    return await _save(session, order)

@@ -4,7 +4,7 @@
 
 from typing import ClassVar
 
-from sqlalchemy import CheckConstraint, Enum, MetaData, SmallInteger
+from sqlalchemy import CheckConstraint, Enum, MetaData, SmallInteger, false, true
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.db import module_metadata
@@ -37,3 +37,5 @@ class Settings(Base):
             length=20,
         )
     )
+    walk_in_sales_enabled: Mapped[bool] = mapped_column(server_default=true())
+    walk_in_deposits_allowed: Mapped[bool] = mapped_column(server_default=false())

@@ -16,7 +16,9 @@ def test_defaults_until_changed(client: TestClient) -> None:
     response = client.get("/company/settings")
     assert response.status_code == HTTPStatus.OK
     assert SettingsView.model_validate_json(response.content) == SettingsView(
-        deposit_refund_policy=DepositRefundPolicy.PAID_AMOUNT
+        deposit_refund_policy=DepositRefundPolicy.PAID_AMOUNT,
+        walk_in_sales_enabled=True,
+        walk_in_deposits_allowed=False,
     )
 
 
@@ -39,6 +41,19 @@ def test_change_refund_policy(client: TestClient) -> None:
     stored = client.get("/company/settings")
     assert (
         SettingsView.model_validate_json(stored.content).deposit_refund_policy == "none"
+    )
+
+
+def test_change_walk_in_limits(client: TestClient) -> None:
+    """Walk-in sales and walk-in deposits are switched independently."""
+    response = client.patch(
+        "/company/settings",
+        json={"walk_in_sales_enabled": False, "walk_in_deposits_allowed": True},
+    )
+    settings = SettingsView.model_validate_json(response.content)
+    assert (settings.walk_in_sales_enabled, settings.walk_in_deposits_allowed) == (
+        False,
+        True,
     )
 
 

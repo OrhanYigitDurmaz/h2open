@@ -11,3 +11,5 @@ class SettingsUpdate(BaseModel):
     """Changes to the settings; omitted fields stay as they are."""
 
     deposit_refund_policy: DepositRefundPolicy | None = None
+    walk_in_sales_enabled: bool | None = None
+    walk_in_deposits_allowed: bool | None = None

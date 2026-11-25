@@ -25,3 +25,11 @@ class SettingsView(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
 
     deposit_refund_policy: DepositRefundPolicy
+    walk_in_sales_enabled: bool
+    """Whether orders without a registered customer are allowed."""
+    walk_in_deposits_allowed: bool
+    """Whether walk-in customers may take new containers by paying a deposit.
+
+    Their deposits cannot be refunded later, since nobody's balance records
+    them. Same-brand swaps are always allowed for walk-ins.
+    """
