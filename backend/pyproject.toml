@@ -6,12 +6,17 @@ authors = [{ name = "Orhan Yiğit Durmaz" }]
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.20.1",
     "fastapi[standard]>=0.165.0",
+    "psycopg[binary]>=3.3.9",
+    "pydantic-settings>=2.16.3",
+    "sqlalchemy[asyncio]>=2.1.9",
 ]
 
 [dependency-groups]
 dev = [
     "basedpyright>=1.40.2",
+    "import-linter>=2.17",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
@@ -37,6 +42,23 @@ ignore = [
 # Every Python file must start with this exact two-line header.
 notice-rgx = '\A# Copyright \d{4}(-\d{4})? Orhan Yiğit Durmaz\n# SPDX-License-Identifier: AGPL-3.0-or-later\n'
 min-file-size = 0
+
+[tool.ruff.lint.flake8-type-checking]
+# These classes read their annotations at runtime, so imports used only in
+# annotations must stay real imports, not move under `if TYPE_CHECKING:`.
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+    "sqlalchemy.orm.DeclarativeBase",
+]
+# FastAPI reads route signatures at runtime to build validation and OpenAPI.
+runtime-evaluated-decorators = [
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.post",
+    "fastapi.APIRouter.put",
+    "fastapi.APIRouter.patch",
+    "fastapi.APIRouter.delete",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"       # Args:, Returns:, Raises: sections
@@ -70,3 +92,47 @@ branch = true
 fail_under = 100
 show_missing = true
 skip_covered = false
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "Layers: main > modules > core"
+type = "layers"
+layers = ["app.main", "app.modules", "app.core"]
+
+[[tool.importlinter.contracts]]
+name = "Module internals (files starting with _) stay private"
+type = "private_modules"
+packages_with_private_modules = ["app"]
+
+[[tool.importlinter.contracts]]
+name = "No import cycles between modules"
+type = "acyclic_siblings"
+ancestors = ["app.modules"]
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+file_template = "%%(year)d%%(month).2d%%(day).2d_%%(hour).2d%%(minute).2d_%%(rev)s_%%(slug)s"
+prepend_sys_path = ["."]
+timezone = "UTC"
+
+# Keep generated migrations in the same shape as hand-written code.
+# basedpyright flags op.create_table()'s unused Table result, so assign it to _.
+[[tool.alembic.post_write_hooks]]
+name = "discard_create_table_result"
+type = "exec"
+executable = "sed"
+options = "-i -E 's/^([[:space:]]+)op[.]create_table[(]/\\1_ = op.create_table(/' REVISION_SCRIPT_FILENAME"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff_format"
+type = "module"
+module = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff_fix"
+type = "module"
+module = "ruff"
+options = "check --fix REVISION_SCRIPT_FILENAME"

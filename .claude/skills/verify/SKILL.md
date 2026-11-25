@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run every lint, format, type and test check for the h2open backend (ruff, basedpyright, pytest) and frontend (prettier, eslint, svelte-check), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
+description: Run every lint, format, type, import-boundary and test check for the h2open backend (ruff, basedpyright, import-linter, pytest) and frontend (prettier, eslint, svelte-check), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
 ---
 
 # Verify h2open
@@ -21,6 +21,7 @@ groups are independent and can run in parallel.
 | Lint | `uv run ruff check .` |
 | Format | `uv run ruff format --check .` |
 | Types | `uv run basedpyright` |
+| Module boundaries | `uv run lint-imports` |
 | Tests | `uv run pytest -q` |
 
 ### Frontend (`frontend/`, SvelteKit via bun)
@@ -31,6 +32,11 @@ groups are independent and can run in parallel.
 | Types | `bun run check` (svelte-kit sync + svelte-check) |
 
 If `frontend/node_modules` is missing, run `bun install` first and say so.
+
+Backend tests need Postgres. If `docker compose ps postgres` shows it is not
+running, start it with `docker compose up -d --wait postgres` (from the repo
+root) and say so. Tests use a separate `<POSTGRES_DB>_test` database that
+they recreate on every run.
 
 ## Scope
 
