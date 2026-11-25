@@ -10,7 +10,12 @@ from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
 from app.core.app import DuplicateModuleError, Module, create_app
-from app.core.errors import ConflictError, DomainError, NotFoundError
+from app.core.errors import (
+    ConflictError,
+    DomainError,
+    NotFoundError,
+    OverrideRequiredError,
+)
 from app.core.events import EventBus
 
 if TYPE_CHECKING:
@@ -39,6 +44,17 @@ def conflict() -> None:
     """
     msg = "order S-1 was changed by someone else"
     raise ConflictError(msg)
+
+
+@router.get("/override")
+def override() -> None:
+    """Raise an override-required error.
+
+    Raises:
+        OverrideRequiredError: Always.
+    """
+    msg = "brand mismatch"
+    raise OverrideRequiredError(msg)
 
 
 @router.get("/rule")
@@ -72,6 +88,7 @@ def test_modules_are_wired_in(database: Database) -> None:
     ("path", "status", "code"),
     [
         ("/demo/conflict", HTTPStatus.CONFLICT, "conflict"),
+        ("/demo/override", HTTPStatus.CONFLICT, "override_required"),
         ("/demo/rule", HTTPStatus.UNPROCESSABLE_CONTENT, "business_rule_violated"),
     ],
 )

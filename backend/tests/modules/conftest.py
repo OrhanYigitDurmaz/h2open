@@ -1,6 +1,6 @@
 # Copyright 2026 Orhan Yiğit Durmaz
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Fixtures for catalog tests."""
+"""Fixtures for module tests."""
 
 from typing import TYPE_CHECKING
 
@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.app import create_app
 from app.core.events import EventBus
-from app.modules.catalog.module import MODULE
+from app.main import MODULES
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -19,11 +19,11 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def client(database: Database) -> Iterator[TestClient]:
-    """An HTTP client for an app with only the catalog module.
+    """An HTTP client for an app with every module, on the test database.
 
     Yields:
         The client.
     """
-    app = create_app([MODULE], event_bus=EventBus(), database=database)
+    app = create_app(MODULES, event_bus=EventBus(), database=database)
     with TestClient(app) as client:
         yield client

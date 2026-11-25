@@ -51,3 +51,12 @@ def domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
         status_code=exc.status_code,
         content={"code": exc.code, "detail": str(exc)},
     )
+
+
+class OverrideRequiredError(ConflictError):
+    """The action breaks a soft rule; staff may repeat it with a reason.
+
+    The caller retries with an override reason, which is stored for audit.
+    """
+
+    code: ClassVar[str] = "override_required"

@@ -168,6 +168,20 @@ def _container_type_view(
     )
 
 
+async def get_container_type(
+    session: AsyncSession, container_type_id: EntityId
+) -> ContainerTypeView:
+    """Look up one container type with its current deposit.
+
+    Returns:
+        The container type.
+    """
+    container_type = await _get(session, ContainerType, container_type_id)
+    return _container_type_view(
+        container_type, await deposit_at(session, container_type_id, _now())
+    )
+
+
 async def create_container_type(
     session: AsyncSession, data: ContainerTypeCreate
 ) -> ContainerTypeView:
@@ -215,9 +229,7 @@ async def update_container_type(
     if data.active is not None:
         container_type.active = data.active
     await _flush(session, f"the brand already has a container type {data.name!r}")
-    return _container_type_view(
-        container_type, await deposit_at(session, container_type_id, _now())
-    )
+    return await get_container_type(session, container_type_id)
 
 
 async def add_deposit_price(

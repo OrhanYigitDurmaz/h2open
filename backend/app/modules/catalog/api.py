@@ -31,6 +31,7 @@ __all__ = [
     "ContainerTypeView",
     "PriceView",
     "ProductView",
+    "get_container_type",
     "get_deposit",
     "get_product",
 ]
@@ -63,3 +64,18 @@ async def get_deposit(
         The deposit in effect at ``at``, or ``None`` if none was set yet.
     """
     return await _service.deposit_at(session, container_type_id, at)
+
+
+async def get_container_type(
+    session: AsyncSession, container_type_id: EntityId
+) -> ContainerTypeView:
+    """Look up one container type with the deposit in effect now.
+
+    Args:
+        session: The caller's database session.
+        container_type_id: The container type.
+
+    Returns:
+        The container type.
+    """
+    return await _service.get_container_type(session, container_type_id)
