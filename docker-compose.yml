@@ -20,5 +20,17 @@ services:
       timeout: 3s
       retries: 10
 
+  asterisk:
+    build: infra/asterisk
+    image: h2open-asterisk
+    restart: unless-stopped
+    # Host networking: SIP and RTP behind Docker's NAT cause one-way audio,
+    # and the MP-114 reaches Asterisk directly on the LAN. ARI listens on
+    # 127.0.0.1 only (http.conf).
+    network_mode: host
+    environment:
+      ARI_USERNAME: ${ARI_USERNAME:?set ARI_USERNAME in .env}
+      ARI_PASSWORD: ${ARI_PASSWORD:?set ARI_PASSWORD in .env}
+
 volumes:
   pg18-data:
