@@ -1,0 +1,9 @@
+# Tests: the same lints, with two that do not fit Qt Test.
+# - unchecked-optional-access: QVERIFY(x.has_value()) returns from the test
+#   when it fails, but the check cannot see that.
+# - use-internal-linkage: the test class is found by moc and QTEST_MAIN, so
+#   it stays at namespace scope.
+InheritParentConfig: true
+Checks: >
+  -bugprone-unchecked-optional-access,
+  -misc-use-internal-linkage

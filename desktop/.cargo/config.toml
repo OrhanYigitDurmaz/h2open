@@ -1,8 +1,0 @@
-# Supply-chain delay: only use crate versions published at least 7 days ago.
-# Malicious releases are usually caught and yanked within days. Needs Cargo 1.100+.
-[registry]
-global-min-publish-age = "7 days"
-
-[resolver]
-# Default, stated explicitly: never fall back to a too-new version.
-incompatible-publish-age = "deny"

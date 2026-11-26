@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run every lint, format, type, import-boundary, dependency and test check for the h2open backend (ruff, basedpyright, import-linter, pytest), frontend (prettier, eslint, svelte-check) and desktop app (cargo fmt, clippy, test, cargo-deny, cargo-machete), regenerate the API docs (docs/openapi.json), look for duplicated code (jscpd), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
+description: Run every lint, format, type, import-boundary, dependency and test check for the h2open backend (ruff, basedpyright, import-linter, pytest), frontend (prettier, eslint, svelte-check) and desktop app (CMake build with warnings as errors, Qt Test, clang-format, clang-tidy), regenerate the API docs (docs/openapi.json), look for duplicated code (jscpd), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
 ---
 
 # Verify h2open
@@ -42,42 +42,29 @@ the command errors, e.g. because the app cannot be imported.
 
 If `frontend/node_modules` is missing, run `bun install` first and say so.
 
-### Desktop (`desktop/`, Rust + Slint via cargo)
+### Desktop (`desktop/`, C++23 + Qt 6 Widgets via CMake)
 
 | Check | Command |
 |---|---|
-| Format | `cargo fmt --check` |
-| Lint + types + UI | `cargo clippy --all-targets --all-features --locked -- -D warnings` |
-| Lint for Windows | `cargo clippy --all-targets --all-features --locked --target x86_64-pc-windows-gnu -- -D warnings` |
-| Tests | `cargo test --all-features --locked` |
-| Dependencies | `cargo deny check` |
-| Unused dependencies | `cargo machete` |
+| Configure | `cmake --preset dev` |
+| Build (warnings are errors) | `cmake --build --preset dev` |
+| Tests | `ctest --preset dev` |
+| Format | `clang-format --dry-run --Werror src/* tests/*` |
+| Lint | `clang-tidy -p build/dev --quiet src/*.cpp tests/*.cpp` |
+| Build with GCC | `cmake --preset release && cmake --build --preset release` |
 
-Clippy also compiles `ui/*.slint` (through `build.rs`), so Slint type and
-binding errors show up there. Its lint levels live in `[lints]` in
-`Cargo.toml` (pedantic, nursery and cargo groups; no `unwrap`/`expect`/`panic`;
-documented `unsafe`). The app ships for Windows and Linux, so clippy runs a
-second time for Windows to catch code behind `cfg(windows)`. If that target
-is missing, run `rustup target add x86_64-pc-windows-gnu` and say so.
-The code Slint generates sits in `mod ui` in `src/main.rs` with those lints
-allowed, since it cannot be changed; never move other code into that module.
+The `dev` preset builds with Clang, because clang-tidy reads its compile
+commands (`build/dev/compile_commands.json`); the `release` preset uses the
+default compiler (GCC here), so both compilers see the code. Warnings live in
+`h2open_options` in `CMakeLists.txt` (`-Wall -Wextra -Wpedantic -Wconversion
+-Wshadow -Wold-style-cast …` with `-Werror`), and Qt string macros
+(`QT_NO_CAST_FROM_ASCII` …) make every string literal say its encoding
+(`u"…"_s`). Lints live in `.clang-tidy` (broad groups as errors; the
+exceptions and their reasons are listed there) and `tests/.clang-tidy`.
 
-`desktop/.cargo/config.toml` sets `global-min-publish-age = "7 days"`, so
-cargo never resolves a crate version published less than 7 days ago (Cargo
-1.100+). If a check fails because a needed version is too new, say so and
-when it becomes eligible; do not override it unless the user asks.
-
-`cargo deny check` reads `deny.toml`: RustSec vulnerabilities and unsound
-crates at any depth, unmaintained direct dependencies, licenses compatible
-with AGPL-3.0, and crates.io as the only source. "found N duplicate entries"
-warnings come from upstream (windows-sys, hashbrown...) and do not fail the
-run; mention their count only if it grows. The first run downloads the
-advisory database.
-
-`cargo deny` and `cargo machete` are separate tools. If one is missing,
-install that pinned version with `cargo install --locked cargo-deny@0.22.0`
-or `cargo install --locked cargo-machete@0.10.1` and say so. Before raising
-either version, check the new release is at least 7 days old.
+Qt itself comes from the system (Arch: `qt6-base`; Windows: the Qt online
+installer), not from a package manager with a lockfile, so there is no
+dependency audit step for the desktop app.
 
 ### Whole repository (repo root)
 
@@ -87,12 +74,12 @@ either version, check the new release is at least 7 days old.
 
 ```sh
 bunx jscpd@5.4.3 --min-lines 4 --min-tokens 50 --reporters console \
-  --ignore "**/node_modules/**,**/.venv/**,**/migrations/versions/**,**/__pycache__/**,docs/**,**/target/**" \
+  --ignore "**/node_modules/**,**/.venv/**,**/migrations/versions/**,**/__pycache__/**,docs/**,**/build/**" \
   backend/app backend/tests frontend/src desktop/src
 ```
 
 jscpd finds blocks of code repeated across files (by tokens, so renamed
-variables still match). It reads Rust but not `.slint` files. The version is pinned: before raising it, check the
+variables still match). It reads Python, TypeScript, Svelte and C++. The version is pinned: before raising it, check the
 new release is at least 7 days old, like any other dependency. Generated
 migrations and `docs/` are skipped, since they repeat by design.
 
@@ -124,10 +111,10 @@ they recreate on every run.
 
 The backend uses ruff `select = ["ALL"]` and basedpyright
 `typeCheckingMode = "all"`. Failures are expected to be real issues; never
-suggest relaxing `pyproject.toml` (or the desktop app's `[lints]` and
-`deny.toml`) as the fix. If a rule is genuinely wrong for
-one line, the right fix is a targeted suppression with a reason (in Rust,
-`#[expect(clippy::…, reason = "…")]`), and the user decides that.
+suggest relaxing `pyproject.toml` (or the desktop app's warning flags and
+`.clang-tidy`) as the fix. If a rule is genuinely wrong for
+one line, the right fix is a targeted suppression with a reason (in C++,
+`// NOLINT(check-name): reason`), and the user decides that.
 
 ## Report
 
@@ -137,5 +124,5 @@ For the API docs row, say "updated" or "unchanged". For the duplicate code
 row, give the number of clones and whether any are new. For each failure, list the
 file:line, the rule code and a short fix suggestion. Group repeated rule violations instead of listing each one.
 Mention `uv run ruff check --fix .`, `uv run ruff format .`, `bun run format`,
-`cargo fmt` or `cargo clippy --fix`
+`clang-format -i src/* tests/*` (in `desktop/`)
 when they would fix the reported issues automatically.

@@ -1,0 +1,25 @@
+# Formatting for desktop/: check with
+#   clang-format --dry-run --Werror src/* tests/*
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+PointerAlignment: Right
+# public: / signals: flush with the class, as in Qt.
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortLambdasOnASingleLine: Inline
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterClass: false
+  AfterStruct: false
+  AfterNamespace: false
+InsertBraces: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"'          # our headers
+    Priority: 1
+  - Regex: '^<Q'         # Qt
+    Priority: 2
+  - Regex: '^<'          # the standard library
+    Priority: 3

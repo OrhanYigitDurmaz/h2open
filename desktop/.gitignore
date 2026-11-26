@@ -1,1 +1,2 @@
-/target/
+# CMake build trees (see CMakePresets.json).
+/build/

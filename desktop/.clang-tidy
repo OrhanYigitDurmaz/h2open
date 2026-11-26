@@ -1,0 +1,33 @@
+# Lints for desktop/: run with
+#   clang-tidy -p build/dev src/*.cpp tests/*.cpp
+#
+# Broad groups, minus the checks that fight Qt itself:
+# - owning-memory: Qt widgets are owned by their parent, so `new` with a
+#   parent is how Qt code allocates.
+# - magic-numbers: sizes and spacing in UI code read better as literals.
+# - trailing return types and short identifiers are style, not bugs.
+# - #pragma once works in every compiler the app is built with (GCC, Clang,
+#   MSVC), and cannot clash the way include guard names can.
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -modernize-use-trailing-return-type,
+  -readability-identifier-length,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -portability-avoid-pragma-once
+WarningsAsErrors: '*'
+# Our code only: not Qt's headers or the code moc generates.
+HeaderFilterRegex: '.*/desktop/(src|tests)/.*'
