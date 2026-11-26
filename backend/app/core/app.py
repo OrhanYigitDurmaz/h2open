@@ -45,6 +45,10 @@ class Module:
     task: Callable[[Database], Coroutine[None, None, None]] | None = None
 
 
+MAX_BODY_SIZE = 256 * 1024
+"""The largest request body accepted; larger ones get 413 Content Too Large."""
+
+
 def health() -> dict[str, str]:
     """Report that the service is up.
 
@@ -110,7 +114,9 @@ def create_app(
                     await task
             await database.dispose()
 
-    app = FastAPI(title="h2open", lifespan=lifespan)
+    # Bodies are small JSON documents; without a limit, anyone who can reach
+    # the API could send an endless one, even to /auth/login.
+    app = FastAPI(title="h2open", lifespan=lifespan, max_body_size=MAX_BODY_SIZE)
     # The decorator form accepts a handler typed for DomainError specifically.
     _ = app.exception_handler(DomainError)(domain_error_handler)
 

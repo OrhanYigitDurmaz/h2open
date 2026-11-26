@@ -177,8 +177,15 @@ def _order_view(order: Order) -> OrderView:
 # Loading
 
 
-async def _load(session: AsyncSession, order_id: EntityId) -> Order:
+async def _load(
+    session: AsyncSession, order_id: EntityId, *, lock: bool = False
+) -> Order:
     """Load an order with its lines and returns, fresh from the database.
+
+    Args:
+        session: The caller's database session.
+        order_id: The order.
+        lock: Lock the order's row until the transaction ends.
 
     Returns:
         The order.
@@ -186,12 +193,13 @@ async def _load(session: AsyncSession, order_id: EntityId) -> Order:
     Raises:
         NotFoundError: No such order.
     """
-    order = await session.scalar(
+    query = (
         select(Order)
         .where(Order.id == order_id)
         .options(selectinload(Order.lines), selectinload(Order.returns))
         .execution_options(populate_existing=True)
     )
+    order = await session.scalar(query.with_for_update(of=Order) if lock else query)
     if order is None:
         msg = f"order {order_id} not found"
         raise NotFoundError(msg)
@@ -199,7 +207,11 @@ async def _load(session: AsyncSession, order_id: EntityId) -> Order:
 
 
 async def _load_open(session: AsyncSession, order_id: EntityId) -> Order:
-    """Load an order that can still change.
+    """Load an order that can still change, and lock it.
+
+    The lock lasts until the transaction ends, so two requests changing the
+    same order (say, a double-tapped "complete") take turns, and the second
+    sees what the first did instead of completing the order again.
 
     Returns:
         The order.
@@ -207,7 +219,7 @@ async def _load_open(session: AsyncSession, order_id: EntityId) -> Order:
     Raises:
         ConflictError: The order is already completed or cancelled.
     """
-    order = await _load(session, order_id)
+    order = await _load(session, order_id, lock=True)
     if order.status is not OrderStatus.OPEN:
         msg = f"order #{order.number} is {order.status.value} and cannot change"
         raise ConflictError(msg)

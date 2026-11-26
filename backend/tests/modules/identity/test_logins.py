@@ -3,6 +3,7 @@
 """Tests for logging in and out, tokens, lockouts and push tokens."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -11,6 +12,7 @@ import pytest
 from pydantic import TypeAdapter
 from sqlalchemy import text
 
+from app.core.app import MAX_BODY_SIZE
 from app.modules.identity import api as identity
 from app.modules.identity.api import Actor, LoginResult, Role, SessionView
 from tests.modules.auth import CREDENTIAL, bearer, login, make_user
@@ -115,6 +117,17 @@ def test_lockout_after_five_failures(client: TestClient, database: Database) -> 
         "UPDATE identity.users SET locked_until = now() - interval '1 second'",
     )
     assert attempt(client, "ayse", CREDENTIAL).status_code == HTTPStatus.OK
+
+
+def test_parallel_failures_all_count(client: TestClient, database: Database) -> None:
+    """Wrong passwords sent at the same moment can't share one failure count."""
+    _ = make_user(database, "ayse", {Role.STAFF})
+    with ThreadPoolExecutor(LOCKING_ATTEMPTS) as pool:
+        tries = [
+            pool.submit(attempt, client, "ayse", WRONG) for _ in range(LOCKING_ATTEMPTS)
+        ]
+    assert all(t.result().status_code == HTTPStatus.UNAUTHORIZED for t in tries)
+    assert attempt(client, "ayse", CREDENTIAL).status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_success_resets_the_failure_count(
@@ -255,3 +268,38 @@ def test_change_own_password(client: TestClient, database: Database) -> None:
     assert me(client, token).status_code == HTTPStatus.OK
     assert me(client, other).status_code == HTTPStatus.UNAUTHORIZED
     assert attempt(client, "ayse", "a much better one").status_code == HTTPStatus.OK
+
+
+def test_wrong_current_passwords_lock_the_account(
+    client: TestClient, database: Database
+) -> None:
+    """A stolen token can't be used to guess the password without limit."""
+    _ = make_user(database, "ayse", {Role.STAFF})
+    token = login(client, "ayse")
+
+    def change(current: str) -> Response:
+        return client.put(
+            "/auth/me/password",
+            json={"current_password": current, "new_password": "a much better one"},
+            headers=bearer(token),
+        )
+
+    for _ in range(LOCKING_ATTEMPTS):
+        assert change(WRONG).status_code == HTTPStatus.UNAUTHORIZED
+    assert change(CREDENTIAL).status_code == HTTPStatus.UNAUTHORIZED
+    assert attempt(client, "ayse", CREDENTIAL).status_code == HTTPStatus.UNAUTHORIZED
+    # The login itself still works; only the guessing stopped.
+    assert me(client, token).status_code == HTTPStatus.OK
+
+    sql(
+        database,
+        "UPDATE identity.users SET locked_until = now() - interval '1 second'",
+    )
+    assert change(CREDENTIAL).status_code == HTTPStatus.NO_CONTENT
+
+
+def test_oversized_bodies_are_refused(client: TestClient) -> None:
+    """Even before logging in, a huge body is cut off with 413."""
+    huge = "x" * (MAX_BODY_SIZE + 1)
+    response = attempt(client, huge, "y")
+    assert response.status_code == HTTPStatus.CONTENT_TOO_LARGE

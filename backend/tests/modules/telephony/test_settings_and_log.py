@@ -67,6 +67,11 @@ def test_bad_settings_are_refused(client: TestClient, database: Database) -> Non
         {"driver_ring_delay_seconds": 301},
         {"shop_endpoints": ["desk1"]},
         {"shop_endpoints": ["PJSIP/desk 1"]},
+        # Anything that would dial out through the landline gateway.
+        {"shop_endpoints": ["PJSIP/08501234567@mp114"]},
+        {"shop_endpoints": ["PJSIP/mp114"]},
+        {"driver_endpoint": "Local/08501234567@from-desk"},
+        {"driver_endpoint": "SIP/provider/0900"},
         {"no_answer_sound": "../../etc/passwd"},
         {"ring_strategy": "random"},
     ]

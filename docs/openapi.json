@@ -213,7 +213,7 @@
           "auth"
         ],
         "summary": "Change Password",
-        "description": "Change your password. Your other logins are ended.",
+        "description": "Change your password. Your other logins are ended.\n\nWrong current passwords count towards the lockout, like failed logins.\n\nReturns:\n    Nothing, or a 401 if the current password is wrong or the account\n    is locked.",
         "operationId": "change_password_auth_me_password_put",
         "requestBody": {
           "content": {
@@ -228,6 +228,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not changed."
           },
           "422": {
             "description": "Validation Error",
@@ -5518,7 +5521,7 @@
       "Endpoint": {
         "type": "string",
         "maxLength": 100,
-        "pattern": "^[A-Za-z]+/[A-Za-z0-9_.@{}-]+$"
+        "pattern": "^(PJSIP/[A-Za-z0-9_.{}-]+|Local/[a-z0-9_-]+@selftest)$"
       },
       "EntityId": {
         "type": "string",

@@ -3,7 +3,10 @@
 #
 # Build and run with docker compose from the repo root:
 #   docker compose up -d --build asterisk
-FROM alpine:edge
+# A stable Alpine release (Asterisk 22 LTS), pinned by digest so a rebuild
+# gets exactly this base image. Edge is a rolling development branch. To
+# update: docker buildx imagetools inspect alpine:3.24, then change both.
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 # Only what we use:
 #   asterisk        the PBX, with PJSIP, ARI, the WebSocket transport and G.711

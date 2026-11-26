@@ -58,6 +58,7 @@ DEFAULT_SECURITY = SecuritySettingsView(
 TOUCH_INTERVAL = timedelta(minutes=1)
 """How stale ``last_used_at`` may get before a request updates it."""
 LOGIN_FAILED = "wrong username or password, or the account is locked for a while"
+NOT_CHANGED = "the current password is wrong, or the account is locked for a while"
 
 
 def _now() -> datetime:
@@ -79,8 +80,16 @@ def _user_view(user: User) -> UserView:
     )
 
 
-async def _load(session: AsyncSession, user_id: EntityId) -> User:
+async def _load(
+    session: AsyncSession, user_id: EntityId, *, lock: bool = False
+) -> User:
     """Load a user with roles.
+
+    Args:
+        session: The caller's database session.
+        user_id: The user.
+        lock: Lock the user's row until the transaction ends, so that
+            concurrent requests can't lose each other's failure counts.
 
     Returns:
         The user.
@@ -88,12 +97,13 @@ async def _load(session: AsyncSession, user_id: EntityId) -> User:
     Raises:
         NotFoundError: No such user.
     """
-    user = await session.scalar(
+    query = (
         select(User)
         .where(User.id == user_id)
         .options(selectinload(User.roles))
         .execution_options(populate_existing=True)
     )
+    user = await session.scalar(query.with_for_update(of=User) if lock else query)
     if user is None:
         msg = f"user {user_id} not found"
         raise NotFoundError(msg)
@@ -154,10 +164,13 @@ async def _check_credentials(
         wrong. Callers must not say which part was wrong.
     """
     now = _now()
+    # Locked until the transaction ends: parallel attempts then count one by
+    # one instead of all reading, and writing back, the same failure count.
     user = await session.scalar(
         select(User)
         .where(User.username == data.username)
         .options(selectinload(User.roles))
+        .with_for_update(of=User)
     )
     matches = await verify_password(
         data.password, DUMMY_HASH if user is None else user.password_hash
@@ -284,16 +297,26 @@ async def set_shift(session: AsyncSession, actor: Actor, *, on_shift: bool) -> U
 
 async def change_password(
     session: AsyncSession, actor: Actor, data: PasswordChange
-) -> None:
+) -> bool:
     """Change one's own password; other logins are ended.
 
-    Raises:
-        UnauthenticatedError: The current password is wrong.
+    Wrong current passwords count towards the lockout like failed logins,
+    so a stolen token can't be used to guess the password. A locked account
+    can't change its password until the lockout ends.
+
+    Returns:
+        Whether the password was changed. ``False`` means the current
+        password was wrong or the account is locked; the caller must still
+        commit, to keep the failure count.
     """
-    user = await _load(session, actor.id)
+    now = _now()
+    user = await _load(session, actor.id, lock=True)
+    if _locked(user, now):
+        return False
     if not await verify_password(data.current_password, user.password_hash):
-        msg = "the current password is wrong"
-        raise UnauthenticatedError(msg)
+        _record_failure(user, now, await get_security_settings(session))
+        return False
+    user.failed_logins = 0
     user.password_hash = await hash_password(data.new_password)
     _ = await session.execute(
         update(Session)
@@ -304,6 +327,7 @@ async def change_password(
         )
         .values(revoked_at=_now())
     )
+    return True
 
 
 async def sessions(session: AsyncSession, user_id: EntityId) -> list[SessionView]:

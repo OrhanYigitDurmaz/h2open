@@ -4,18 +4,42 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
 from app.modules.telephony._views import CallStatus, RingStrategy
+
+TRUNK = "PJSIP/mp114"
+"""The landline gateway. Ringing it would dial out on the shop's lines."""
+
+
+def _not_the_trunk(endpoint: str) -> str:
+    """Refuse the landline gateway as a phone to ring.
+
+    Returns:
+        The endpoint, unchanged.
+
+    Raises:
+        ValueError: It is the gateway.
+    """
+    if endpoint.lower() == TRUNK.lower():
+        msg = "the landline gateway is not a phone to ring"
+        raise ValueError(msg)
+    return endpoint
+
 
 type Endpoint = Annotated[
     str,
     StringConstraints(
         strip_whitespace=True,
         max_length=100,
-        # Technology/resource, e.g. PJSIP/desk1 or Local/answer@selftest.
-        pattern=r"^[A-Za-z]+/[A-Za-z0-9_.@{}-]+$",
+        # Only phones of our own: a PJSIP endpoint by name (PJSIP/desk1,
+        # PJSIP/driver-{username}), or the test numbers in the selftest
+        # context (Local/answer@selftest). No "@" after PJSIP and no other
+        # Local context, so the settings can't make every incoming call also
+        # dial an outside number through the landline gateway.
+        pattern=r"^(PJSIP/[A-Za-z0-9_.{}-]+|Local/[a-z0-9_-]+@selftest)$",
     ),
+    AfterValidator(_not_the_trunk),
 ]
 type Sound = Annotated[
     str, StringConstraints(strip_whitespace=True, pattern=r"^[a-z0-9_/-]{1,100}$")

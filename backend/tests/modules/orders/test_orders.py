@@ -3,6 +3,7 @@
 """Tests for orders: taking, changing, completing and cancelling them."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -310,6 +311,17 @@ def test_cancel_and_finality(shop: Shop) -> None:
     empty = shop.delivery({shop.pack: 1})
     response = shop.complete(empty, lines=[], returned=[])
     assert "cancel the order instead" in response.json()["detail"]
+
+
+def test_parallel_completions_complete_once(shop: Shop) -> None:
+    """A double-tapped "complete" takes stock and empties only once."""
+    shop.give_carboys(2)
+    order = shop.delivery({shop.water: 2, shop.cups: 1})
+    tries = 4
+    with ThreadPoolExecutor(tries) as pool:
+        sent = [pool.submit(shop.complete, order) for _ in range(tries)]
+    statuses = sorted(s.result().status_code for s in sent)
+    assert statuses == [HTTPStatus.OK] + [HTTPStatus.CONFLICT] * (tries - 1)
 
 
 def test_list_orders(shop: Shop) -> None:

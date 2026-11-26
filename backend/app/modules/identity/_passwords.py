@@ -5,7 +5,9 @@
 Parameters follow the OWASP Password Storage Cheat Sheet (N=2^15, r=8,
 p=3: about 32 MiB per hash). They are stored in each hash, so they can be
 raised later without breaking existing passwords. Hashing runs in a worker
-thread so a login never blocks other requests.
+thread so a login never blocks other requests, and at most
+``MAX_CONCURRENT_HASHES`` run at once, so a flood of logins queues instead
+of using 32 MiB each until the server runs out of memory.
 """
 
 import base64
@@ -15,12 +17,15 @@ import hmac
 import secrets
 from dataclasses import dataclass
 
-from anyio import to_thread
+from anyio import CapacityLimiter, to_thread
 
 _PREFIX = "scrypt"
 _SALT_BYTES = 16
 _KEY_BYTES = 32
 _MAX_MEMORY = 256 * 1024 * 1024
+MAX_CONCURRENT_HASHES = 4
+"""About 128 MiB at most; a shop has a handful of logins a minute."""
+_hashing = CapacityLimiter(MAX_CONCURRENT_HASHES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +85,7 @@ async def hash_password(password: str) -> str:
     Returns:
         A self-describing hash: ``scrypt$N$r$p$salt$key``.
     """
-    return await to_thread.run_sync(_hash_sync, password)
+    return await to_thread.run_sync(_hash_sync, password, limiter=_hashing)
 
 
 async def verify_password(password: str, encoded: str) -> bool:
@@ -93,7 +98,7 @@ async def verify_password(password: str, encoded: str) -> bool:
     Returns:
         Whether the password matches. Malformed hashes never match.
     """
-    return await to_thread.run_sync(_verify_sync, password, encoded)
+    return await to_thread.run_sync(_verify_sync, password, encoded, limiter=_hashing)
 
 
 DUMMY_HASH = _encode(b"\0" * _SALT_BYTES, b"\0" * _KEY_BYTES, COST)

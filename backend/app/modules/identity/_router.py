@@ -94,12 +94,27 @@ async def set_shift(
     return await _service.set_shift(session, actor, on_shift=data.on_shift)
 
 
-@auth.put("/me/password", status_code=HTTPStatus.NO_CONTENT)
+@auth.put(
+    "/me/password",
+    status_code=HTTPStatus.NO_CONTENT,
+    response_model=None,
+    responses={HTTPStatus.UNAUTHORIZED: {"description": "Not changed."}},
+)
 async def change_password(
     session: SessionDep, actor: CurrentActor, data: PasswordChange
-) -> None:
-    """Change your password. Your other logins are ended."""
-    await _service.change_password(session, actor, data)
+) -> JSONResponse | None:
+    """Change your password. Your other logins are ended.
+
+    Wrong current passwords count towards the lockout, like failed logins.
+
+    Returns:
+        Nothing, or a 401 if the current password is wrong or the account
+        is locked.
+    """
+    if not await _service.change_password(session, actor, data):
+        # Returned, not raised: the transaction must commit the failure count.
+        return error_response(UnauthenticatedError(_service.NOT_CHANGED))
+    return None
 
 
 @users.post("", status_code=HTTPStatus.CREATED)
