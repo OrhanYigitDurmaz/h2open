@@ -29,6 +29,7 @@ from app.modules.containers._views import (
     MovementView,
 )
 from app.modules.customers import api as customers
+from app.modules.inventory import api as inventory
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -361,8 +362,37 @@ async def exchange(
         actor_id=actor_id,
     )
     if data.customer_id is None:
-        return _walk_in(context)
-    return await _record(session, data, data.customer_id, context)
+        result = _walk_in(context)
+    else:
+        result = await _record(session, data, data.customer_id, context)
+    await _stock_empties(session, data, result.exchange_id, actor_id)
+    return result
+
+
+async def _stock_empties(
+    session: AsyncSession,
+    data: ExchangeCreate,
+    exchange_id: EntityId,
+    actor_id: EntityId,
+) -> None:
+    """Every empty handed back, swap or return, goes into our empties stock."""
+    _ = await inventory.record(
+        session,
+        [
+            inventory.StockChange(
+                kind=inventory.ItemKind.EMPTY,
+                item_id=count.container_type_id,
+                change=count.quantity,
+            )
+            for count in data.returned
+        ],
+        inventory.Source(
+            inventory.MovementReason.CUSTOMER_RETURN,
+            actor_id,
+            source_id=exchange_id,
+            note=data.note,
+        ),
+    )
 
 
 async def _record(

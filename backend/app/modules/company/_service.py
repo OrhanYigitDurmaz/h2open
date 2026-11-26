@@ -16,6 +16,7 @@ DEFAULTS = SettingsView(
     deposit_refund_policy=DepositRefundPolicy.PAID_AMOUNT,
     walk_in_sales_enabled=True,
     walk_in_deposits_allowed=False,
+    negative_stock_allowed=True,
 )
 
 
@@ -26,6 +27,7 @@ def _view(row: Settings | None) -> SettingsView:
         deposit_refund_policy=row.deposit_refund_policy,
         walk_in_sales_enabled=row.walk_in_sales_enabled,
         walk_in_deposits_allowed=row.walk_in_deposits_allowed,
+        negative_stock_allowed=row.negative_stock_allowed,
     )
 
 
@@ -51,6 +53,7 @@ async def update_settings(session: AsyncSession, data: SettingsUpdate) -> Settin
             deposit_refund_policy=DEFAULTS.deposit_refund_policy,
             walk_in_sales_enabled=DEFAULTS.walk_in_sales_enabled,
             walk_in_deposits_allowed=DEFAULTS.walk_in_deposits_allowed,
+            negative_stock_allowed=DEFAULTS.negative_stock_allowed,
         )
         session.add(row)
     if data.deposit_refund_policy is not None:
@@ -59,5 +62,7 @@ async def update_settings(session: AsyncSession, data: SettingsUpdate) -> Settin
         row.walk_in_sales_enabled = data.walk_in_sales_enabled
     if data.walk_in_deposits_allowed is not None:
         row.walk_in_deposits_allowed = data.walk_in_deposits_allowed
+    if data.negative_stock_allowed is not None:
+        row.negative_stock_allowed = data.negative_stock_allowed
     await session.flush()
     return _view(row)

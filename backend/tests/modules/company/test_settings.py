@@ -19,6 +19,7 @@ def test_defaults_until_changed(client: TestClient) -> None:
         deposit_refund_policy=DepositRefundPolicy.PAID_AMOUNT,
         walk_in_sales_enabled=True,
         walk_in_deposits_allowed=False,
+        negative_stock_allowed=True,
     )
 
 
@@ -55,6 +56,14 @@ def test_change_walk_in_limits(client: TestClient) -> None:
         False,
         True,
     )
+
+
+def test_change_negative_stock(client: TestClient) -> None:
+    """Negative stock can be forbidden."""
+    response = client.patch("/company/settings", json={"negative_stock_allowed": False})
+    assert SettingsView.model_validate_json(
+        response.content
+    ).negative_stock_allowed is (False)
 
 
 def test_unknown_policy_is_rejected(client: TestClient) -> None:

@@ -33,3 +33,10 @@ class SettingsView(BaseModel):
     Their deposits cannot be refunded later, since nobody's balance records
     them. Same-brand swaps are always allowed for walk-ins.
     """
+    negative_stock_allowed: bool
+    """Whether stock may go below zero.
+
+    When allowed, sales never wait for paperwork: a negative level just
+    shows that a receipt or a count is missing. When not, a sale or other
+    removal that would go below zero is refused.
+    """

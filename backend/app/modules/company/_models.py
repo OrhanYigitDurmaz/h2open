@@ -39,3 +39,4 @@ class Settings(Base):
     )
     walk_in_sales_enabled: Mapped[bool] = mapped_column(server_default=true())
     walk_in_deposits_allowed: Mapped[bool] = mapped_column(server_default=false())
+    negative_stock_allowed: Mapped[bool] = mapped_column(server_default=true())

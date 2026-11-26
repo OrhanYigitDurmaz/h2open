@@ -17,6 +17,7 @@ from app.modules.catalog import api as catalog
 from app.modules.company import api as company
 from app.modules.containers import api as containers
 from app.modules.customers import api as customers
+from app.modules.inventory import api as inventory
 from app.modules.orders._models import Order, OrderLine, OrderReturn
 from app.modules.orders._views import (
     ContainerReturnView,
@@ -525,6 +526,29 @@ def _amount(money: Money | None) -> Decimal | None:
     return None if money is None else money.amount
 
 
+async def _take_from_stock(
+    session: AsyncSession, order: Order, actor_id: EntityId
+) -> None:
+    """Take the delivered goods out of stock."""
+    _ = await inventory.record(
+        session,
+        [
+            inventory.StockChange(
+                kind=inventory.ItemKind.PRODUCT,
+                item_id=line.product_id,
+                change=-(line.delivered_quantity or 0),
+            )
+            for line in order.lines
+        ],
+        inventory.Source(
+            inventory.MovementReason.SALE,
+            actor_id,
+            source_id=order.id,
+            note=f"Order #{order.number}",
+        ),
+    )
+
+
 async def complete_order(
     session: AsyncSession, order_id: EntityId, data: OrderCompletion, actor_id: EntityId
 ) -> OrderView:
@@ -553,6 +577,7 @@ async def complete_order(
         raise DomainError(msg)
     order.override_reason = data.override_reason
     await _exchange_containers(session, order, returned, actor_id)
+    await _take_from_stock(session, order, actor_id)
     order.completed_by = actor_id
     order.status = OrderStatus.COMPLETED
     order.completed_at = _now()

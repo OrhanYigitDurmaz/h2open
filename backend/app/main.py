@@ -11,15 +11,19 @@ from app.modules.company.module import MODULE as COMPANY
 from app.modules.containers.module import MODULE as CONTAINERS
 from app.modules.customers.module import MODULE as CUSTOMERS
 from app.modules.identity.module import MODULE as IDENTITY
+from app.modules.inventory.module import MODULE as INVENTORY
 from app.modules.orders.module import MODULE as ORDERS
+from app.modules.purchasing.module import MODULE as PURCHASING
 
 MODULES: tuple[Module, ...] = (
     IDENTITY,
     CATALOG,
     COMPANY,
     CUSTOMERS,
+    INVENTORY,
     CONTAINERS,
     ORDERS,
+    PURCHASING,
 )
 
 event_bus = EventBus()
