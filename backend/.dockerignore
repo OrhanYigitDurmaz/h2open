@@ -1,0 +1,9 @@
+# Only the app, migrations and dependency files go into the image.
+.venv/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/
+.env

@@ -38,5 +38,25 @@ services:
     volumes:
       - ./infra/asterisk/sounds:/var/lib/asterisk/sounds/h2open:ro
 
+  backend:
+    build: backend
+    image: h2open-backend
+    restart: unless-stopped
+    # Host networking, like Asterisk: ARI listens on 127.0.0.1 only, and the
+    # API is reachable at BACKEND_HOST:BACKEND_PORT (127.0.0.1:8000 unless
+    # .env opens it to the LAN for the POS).
+    network_mode: host
+    env_file: .env
+    environment:
+      # Postgres is published on the host's loopback (see above).
+      POSTGRES_HOST: 127.0.0.1
+      # Firebase key, if present, from the read-only secrets/ mount.
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:+/run/secrets/h2open/firebase-service-account.json}
+    volumes:
+      - ./secrets:/run/secrets/h2open:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pg18-data:

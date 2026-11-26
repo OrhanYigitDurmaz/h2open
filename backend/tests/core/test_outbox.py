@@ -203,7 +203,9 @@ def test_notify_wakes_the_dispatcher(database: Database) -> None:
         task = asyncio.create_task(Dispatcher(database, bus, poll_interval=60).run())
         await send(database, Ping(n=1))
         assert await asyncio.wait_for(seen.get(), timeout=5) == 1
-        # Now it is certainly listening, so only NOTIFY can wake it in time.
+        # Let it finish that pass and go back to waiting. Polling is a
+        # minute away, so only the NOTIFY can wake it in time now.
+        await asyncio.sleep(0.3)
         await send(database, Ping(n=2))
         assert await asyncio.wait_for(seen.get(), timeout=5) == TWO
         _ = task.cancel()

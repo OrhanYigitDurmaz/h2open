@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 CALLS = TypeAdapter(list[CallView])
 CHANNELS = TypeAdapter(list[dict[str, object]])
 NUMBER = "05321234567"
+TEST_APP = "h2open-selftest"
 
 
 def _asterisk() -> AriConnection | None:
@@ -58,7 +59,11 @@ def _asterisk() -> AriConnection | None:
     if response.status_code != HTTPStatus.OK:
         return None
     return AriConnection(
-        url=url, username=username, password=password, app=telephony.APP
+        # Not telephony.APP: a running backend handles that app's calls.
+        url=url,
+        username=username,
+        password=password,
+        app=TEST_APP,
     )
 
 
