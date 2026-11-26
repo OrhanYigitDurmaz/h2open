@@ -9,11 +9,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from app.core import outbox
+from app.core.ids import new_id
 from app.core.push import PushError, PushStatus, SendOutcome, get_sender, use_sender
 from app.modules.identity import api as identity
 from app.modules.identity.api import LoginResult, Role
 from app.modules.notifications import api as notifications
 from app.modules.notifications.api import PushReport
+from app.modules.telephony.api import DriversRung
 from tests.modules.auth import CREDENTIAL, bearer, make_user
 from tests.modules.orders.helpers import Shop, make_shop, ok
 
@@ -303,3 +306,25 @@ def test_push_for_other_modules(
     assert crew.shop.client.get("/auth/me", headers=crew.ali).status_code == (
         HTTPStatus.OK
     )
+
+
+def test_incoming_calls_wake_the_drivers_on_shift(
+    crew: Crew, database: Database, phones: FakeSender
+) -> None:
+    """A call the shop didn't take rings drivers' phones via a push."""
+
+    async def announce(caller: str | None) -> None:
+        async with database.transaction() as session:
+            event = DriversRung(
+                call_id=new_id(), caller_number=caller, customer_name=None
+            )
+            await outbox.publish(session, event)
+
+    asyncio.run(announce("05321234567"))
+    crew.flush()
+    assert phones.take() == [("ali-phone", "incoming_call")]
+
+    phones.broken.add("ali-phone")
+    asyncio.run(announce(None))
+    crew.flush()  # retried until the outbox gives up
+    assert phones.take() == []

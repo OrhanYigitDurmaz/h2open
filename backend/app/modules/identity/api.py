@@ -49,6 +49,7 @@ __all__ = [
     "admin_actor",
     "create_user",
     "current_actor",
+    "drivers_on_shift",
     "forget_push_token",
     "push_targets",
     "user_push_targets",
@@ -97,6 +98,18 @@ async def user_push_targets(
         One target per live login with a push token.
     """
     return await _service.user_push_targets(session, user_id)
+
+
+async def drivers_on_shift(session: AsyncSession) -> list[UserView]:
+    """Active drivers who are on shift right now.
+
+    Args:
+        session: The caller's database session.
+
+    Returns:
+        The drivers, by username.
+    """
+    return await _service.drivers_on_shift(session)
 
 
 async def forget_push_token(session: AsyncSession, fcm_token: str) -> None:

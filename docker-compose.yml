@@ -31,6 +31,12 @@ services:
     environment:
       ARI_USERNAME: ${ARI_USERNAME:?set ARI_USERNAME in .env}
       ARI_PASSWORD: ${ARI_PASSWORD:?set ARI_PASSWORD in .env}
+      # Optional until the MP-114 is connected.
+      MP114_ADDRESS: ${MP114_ADDRESS:-}
+      DESK1_PASSWORD: ${DESK1_PASSWORD:-}
+      DESK2_PASSWORD: ${DESK2_PASSWORD:-}
+    volumes:
+      - ./infra/asterisk/sounds:/var/lib/asterisk/sounds/h2open:ro
 
 volumes:
   pg18-data:

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Tests for application assembly and error handling."""
 
+import asyncio
+import threading
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -119,3 +121,23 @@ def test_duplicate_module_names_are_rejected(database: Database) -> None:
             event_bus=EventBus(),
             database=database,
         )
+
+
+def test_module_tasks_run_while_the_app_runs(database: Database) -> None:
+    """A module's background task starts with the app and is cancelled after."""
+    running = threading.Event()
+    stopped = threading.Event()
+
+    async def task(_database: Database) -> None:
+        running.set()
+        try:
+            _ = await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    app = create_app(
+        [Module(name="demo", task=task)], event_bus=EventBus(), database=database
+    )
+    with TestClient(app):
+        assert running.wait(timeout=5)
+    assert stopped.is_set()

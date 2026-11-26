@@ -14,7 +14,7 @@ from app.core.errors import DomainError, domain_error_handler
 from app.core.outbox import Dispatcher, run_forever
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Sequence
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Sequence
 
     from sqlalchemy import MetaData
 
@@ -33,12 +33,16 @@ class Module:
         router: The module's HTTP endpoints, if any.
         subscribe: Registers the module's event handlers on the bus.
         metadata: The module's tables, for migrations.
+        task: Runs in the background for as long as the app runs, e.g. to
+            follow a stream of events from another system. Cancelled on
+            shutdown.
     """
 
     name: str
     router: APIRouter | None = None
     subscribe: Callable[[EventBus], None] | None = None
     metadata: MetaData | None = None
+    task: Callable[[Database], Coroutine[None, None, None]] | None = None
 
 
 def health() -> dict[str, str]:
@@ -67,7 +71,7 @@ def create_app(
     *,
     event_bus: EventBus,
     database: Database,
-    dispatch_events: bool = True,
+    background: bool = True,
 ) -> FastAPI:
     """Build the application and wire every module into it.
 
@@ -75,8 +79,8 @@ def create_app(
         modules: The modules to include.
         event_bus: The bus that module handlers subscribe to.
         database: The database; its connections are closed on shutdown.
-        dispatch_events: Run the outbox dispatcher in the background while
-            the app runs. Tests turn it off and dispatch by hand.
+        background: Run the outbox dispatcher and the modules' tasks while
+            the app runs. Tests turn it off and drive them by hand.
 
     Returns:
         The configured application.
@@ -87,18 +91,23 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[AppState]:
-        dispatcher: asyncio.Task[None] | None = None
-        if dispatch_events:
-            dispatcher = asyncio.create_task(
-                run_forever(Dispatcher(database, event_bus))
+        tasks: list[asyncio.Task[None]] = []
+        if background:
+            tasks.append(
+                asyncio.create_task(run_forever(Dispatcher(database, event_bus)))
+            )
+            tasks.extend(
+                asyncio.create_task(module.task(database))
+                for module in modules
+                if module.task is not None
             )
         try:
             yield {"database": database}
         finally:
-            if dispatcher is not None:
-                _ = dispatcher.cancel()
+            for task in tasks:
+                _ = task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await dispatcher
+                    await task
             await database.dispose()
 
     app = FastAPI(title="h2open", lifespan=lifespan)

@@ -1268,7 +1268,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SettingsUpdate"
+                "$ref": "#/components/schemas/app__modules__company___schemas__SettingsUpdate"
               }
             }
           },
@@ -3730,6 +3730,229 @@
         }
       }
     },
+    "/telephony/settings": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Get Settings",
+        "description": "Read how incoming calls are rung.\n\nReturns:\n    The settings in effect.",
+        "operationId": "get_settings_telephony_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelephonySettingsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Update Settings",
+        "description": "Change how incoming calls are rung.\n\nReturns:\n    The settings in effect afterwards.",
+        "operationId": "update_settings_telephony_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__telephony___schemas__SettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelephonySettingsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/calls": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "List Calls",
+        "description": "The call log, newest first; ``status=missed`` lists calls to return.\n\nReturns:\n    The matching calls.",
+        "operationId": "list_calls_calls_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CallStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CallView"
+                  },
+                  "title": "Response List Calls Calls Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calls/active": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Active Calls",
+        "description": "Calls ringing or in progress, for the POS's incoming-call popup.\n\nReturns:\n    The calls, oldest first, with the caller's customer if known.",
+        "operationId": "active_calls_calls_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CallView"
+                  },
+                  "type": "array",
+                  "title": "Response Active Calls Calls Active Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/calls/{call_id}": {
+      "get": {
+        "tags": [
+          "telephony"
+        ],
+        "summary": "Get Call",
+        "description": "Get one call.\n\nReturns:\n    The call.",
+        "operationId": "get_call_calls__call_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Call Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/notifications/status": {
       "get": {
         "tags": [
@@ -4107,6 +4330,140 @@
         ],
         "title": "BrandView",
         "description": "A brand."
+      },
+      "CallStatus": {
+        "type": "string",
+        "enum": [
+          "ringing",
+          "answered",
+          "completed",
+          "missed"
+        ],
+        "title": "CallStatus",
+        "description": "Where a call is in its life."
+      },
+      "CallView": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "caller_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caller Number"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "answered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "answered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By"
+          },
+          "answered_by_user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "line",
+          "caller_number",
+          "customer_id",
+          "customer_name",
+          "status",
+          "started_at",
+          "answered_at",
+          "ended_at",
+          "answered_by",
+          "answered_by_user",
+          "end_reason"
+        ],
+        "title": "CallView",
+        "description": "One landline call."
       },
       "CallerMatch": {
         "properties": {
@@ -4677,6 +5034,22 @@
         "type": "string",
         "maxLength": 50,
         "minLength": 1
+      },
+      "EndReason": {
+        "type": "string",
+        "enum": [
+          "caller_hung_up",
+          "answerer_hung_up",
+          "no_answer",
+          "interrupted"
+        ],
+        "title": "EndReason",
+        "description": "Why a call ended."
+      },
+      "Endpoint": {
+        "type": "string",
+        "maxLength": 100,
+        "pattern": "^[A-Za-z]+/[A-Za-z0-9_.@{}-]+$"
       },
       "EntityId": {
         "type": "string",
@@ -6514,6 +6887,16 @@
         "title": "Release",
         "description": "A driver putting a delivery back in the pool."
       },
+      "RingStrategy": {
+        "type": "string",
+        "enum": [
+          "shop_first",
+          "everyone",
+          "shop_only"
+        ],
+        "title": "RingStrategy",
+        "description": "Who rings when a landline call comes in."
+      },
       "Role": {
         "type": "string",
         "enum": [
@@ -6654,82 +7037,6 @@
         "title": "SessionView",
         "description": "An active login of a user."
       },
-      "SettingsUpdate": {
-        "properties": {
-          "deposit_refund_policy": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DepositRefundPolicy"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "walk_in_sales_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Walk In Sales Enabled"
-          },
-          "walk_in_deposits_allowed": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Walk In Deposits Allowed"
-          },
-          "negative_stock_allowed": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Negative Stock Allowed"
-          },
-          "unclaimed_alert_minutes": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 1440.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unclaimed Alert Minutes"
-          },
-          "uncompleted_alert_minutes": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 1440.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Uncompleted Alert Minutes"
-          }
-        },
-        "type": "object",
-        "title": "SettingsUpdate",
-        "description": "Changes to the settings; omitted fields stay as they are."
-      },
       "SettingsView": {
         "properties": {
           "deposit_refund_policy": {
@@ -6781,6 +7088,10 @@
         ],
         "title": "ShiftUpdate",
         "description": "A driver starting or ending their shift."
+      },
+      "Sound": {
+        "type": "string",
+        "pattern": "^[a-z0-9_/-]{1,100}$"
       },
       "StockLevelView": {
         "properties": {
@@ -7120,6 +7431,54 @@
         "type": "string",
         "pattern": "^\\d{10,11}$"
       },
+      "TelephonySettingsView": {
+        "properties": {
+          "ring_strategy": {
+            "$ref": "#/components/schemas/RingStrategy"
+          },
+          "driver_ring_delay_seconds": {
+            "type": "integer",
+            "title": "Driver Ring Delay Seconds"
+          },
+          "ring_timeout_seconds": {
+            "type": "integer",
+            "title": "Ring Timeout Seconds"
+          },
+          "shop_endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shop Endpoints"
+          },
+          "driver_endpoint": {
+            "type": "string",
+            "title": "Driver Endpoint"
+          },
+          "no_answer_sound": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Answer Sound"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ring_strategy",
+          "driver_ring_delay_seconds",
+          "ring_timeout_seconds",
+          "shop_endpoints",
+          "driver_endpoint",
+          "no_answer_sound"
+        ],
+        "title": "TelephonySettingsView",
+        "description": "How incoming calls are rung."
+      },
       "Text": {
         "type": "string",
         "maxLength": 500,
@@ -7316,6 +7675,82 @@
         "maxLength": 100,
         "minLength": 1
       },
+      "app__modules__company___schemas__SettingsUpdate": {
+        "properties": {
+          "deposit_refund_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRefundPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "walk_in_sales_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walk In Sales Enabled"
+          },
+          "walk_in_deposits_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walk In Deposits Allowed"
+          },
+          "negative_stock_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Stock Allowed"
+          },
+          "unclaimed_alert_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unclaimed Alert Minutes"
+          },
+          "uncompleted_alert_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uncompleted Alert Minutes"
+          }
+        },
+        "type": "object",
+        "title": "SettingsUpdate",
+        "description": "Changes to the settings; omitted fields stay as they are."
+      },
       "app__modules__containers___views__MovementView": {
         "properties": {
           "id": {
@@ -7471,6 +7906,84 @@
         "type": "string",
         "maxLength": 200,
         "minLength": 1
+      },
+      "app__modules__telephony___schemas__SettingsUpdate": {
+        "properties": {
+          "ring_strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RingStrategy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "driver_ring_delay_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 300.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Ring Delay Seconds"
+          },
+          "ring_timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 600.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ring Timeout Seconds"
+          },
+          "shop_endpoints": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Endpoint"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shop Endpoints"
+          },
+          "driver_endpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Endpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "no_answer_sound": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Sound"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "SettingsUpdate",
+        "description": "Changes to the ring settings; omitted fields stay as they are."
       }
     },
     "securitySchemes": {

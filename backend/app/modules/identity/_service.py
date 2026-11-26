@@ -388,6 +388,27 @@ async def user_push_targets(
     return await _push_targets(session, User.id == user_id)
 
 
+async def drivers_on_shift(session: AsyncSession) -> list[UserView]:
+    """Active drivers who are on shift.
+
+    Returns:
+        The drivers, by username.
+    """
+    users = await session.scalars(
+        select(User)
+        .options(selectinload(User.roles))
+        .where(
+            User.active,
+            User.on_shift,
+            select(UserRole.user_id)
+            .where(UserRole.user_id == User.id, UserRole.role == Role.DRIVER)
+            .exists(),
+        )
+        .order_by(User.username)
+    )
+    return [_user_view(user) for user in users]
+
+
 async def forget_push_token(session: AsyncSession, fcm_token: str) -> None:
     """Stop using a push token Firebase says is no longer valid."""
     _ = await session.execute(

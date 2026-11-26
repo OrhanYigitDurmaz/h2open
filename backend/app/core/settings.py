@@ -43,7 +43,15 @@ class Settings(BaseSettings):
     Without it, push messages are skipped and logged.
     """
 
-    @field_validator("fcm_credentials_file", mode="before")
+    ari_url: str = "http://127.0.0.1:8088"
+    """Where Asterisk's REST interface (ARI) is."""
+    ari_username: str | None = None
+    ari_password: SecretStr | None = None
+    """Without ARI credentials, the backend does not handle phone calls."""
+
+    @field_validator(
+        "fcm_credentials_file", "ari_username", "ari_password", mode="before"
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():

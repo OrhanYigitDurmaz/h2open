@@ -50,9 +50,7 @@ def client(database: Database, event_bus: EventBus) -> Iterator[TestClient]:
     Yields:
         The client.
     """
-    app = create_app(
-        MODULES, event_bus=event_bus, database=database, dispatch_events=False
-    )
+    app = create_app(MODULES, event_bus=event_bus, database=database, background=False)
     with TestClient(app) as client:
         _ = make_user(database, "admin", {Role.ADMIN})
         client.headers.update(bearer(login(client, "admin")))

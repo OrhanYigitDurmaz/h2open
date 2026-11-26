@@ -15,6 +15,7 @@ from app.modules.inventory.module import MODULE as INVENTORY
 from app.modules.notifications.module import MODULE as NOTIFICATIONS
 from app.modules.orders.module import MODULE as ORDERS
 from app.modules.purchasing.module import MODULE as PURCHASING
+from app.modules.telephony.module import MODULE as TELEPHONY
 
 MODULES: tuple[Module, ...] = (
     IDENTITY,
@@ -25,6 +26,7 @@ MODULES: tuple[Module, ...] = (
     CONTAINERS,
     ORDERS,
     PURCHASING,
+    TELEPHONY,
     NOTIFICATIONS,
 )
 

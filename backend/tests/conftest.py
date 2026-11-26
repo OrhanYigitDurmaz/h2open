@@ -43,6 +43,8 @@ def pytest_configure() -> None:
     )
     # Tests never send real push messages, whatever .env says.
     os.environ["FCM_CREDENTIALS_FILE"] = ""
+    # Nor do they connect to a real Asterisk unless a test asks for it.
+    os.environ["ARI_PASSWORD"] = ""
     database = load_settings().postgres_db
     if not database.endswith("_test"):
         os.environ["POSTGRES_DB"] = f"{database}_test"
