@@ -1,0 +1,52 @@
+# cargo-deny: advisories, licenses, banned crates and allowed sources.
+# Run with `cargo deny check` from desktop/.
+
+[graph]
+# The app ships for Windows and Linux; ignore crates only other targets pull in.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+]
+all-features = true
+
+[advisories]
+# Vulnerable and unsound crates fail at any depth (the default). "Unmaintained"
+# fails only for our direct dependencies: deep ones come from Slint and zbus
+# and only upstream can replace them.
+unmaintained = "workspace"
+yanked = "deny"
+
+[licenses]
+# Everything must be compatible with h2open's AGPL-3.0-only.
+# GPL-3.0-only is allowed because GPLv3 and AGPLv3 code may be combined
+# (section 13 of each); Slint is used under that option.
+allow = [
+    "0BSD",
+    "AGPL-3.0-only",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "GPL-3.0-only",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+# Several copies of one crate (windows-sys, objc2...) come from upstream and
+# cannot be fixed here: report them, do not fail.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

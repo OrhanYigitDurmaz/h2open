@@ -1,0 +1,71 @@
+import { Button, LineEdit, Palette } from "std-widgets.slint";
+
+// Login screen. UI only for now: the button does nothing yet.
+component LoginCard inherits Rectangle {
+    width: 360px;
+    background: Palette.background;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 16px;
+
+        VerticalLayout {
+            spacing: 6px;
+            Text {
+                text: "h2open";
+                font-size: 13px;
+                font-weight: 600;
+                color: Palette.accent-background;
+            }
+            Text {
+                text: "Log in";
+                font-size: 22px;
+                font-weight: 600;
+            }
+            Text {
+                text: "Use the account your admin gave you.";
+                font-size: 13px;
+                color: Palette.foreground.transparentize(40%);
+            }
+        }
+
+        VerticalLayout {
+            spacing: 6px;
+            Text { text: "Username"; font-size: 13px; font-weight: 500; }
+            username := LineEdit { }
+        }
+
+        VerticalLayout {
+            spacing: 6px;
+            Text { text: "Password"; font-size: 13px; font-weight: 500; }
+            LineEdit { input-type: password; }
+        }
+
+        Button {
+            text: "Log in";
+            primary: true;
+        }
+    }
+
+    init => { username.focus(); }
+}
+
+export component AppWindow inherits Window {
+    title: "Log in · h2open";
+    preferred-width: 960px;
+    preferred-height: 640px;
+    min-width: 420px;
+    min-height: 480px;
+    background: Palette.alternate-background;
+
+    VerticalLayout {
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            LoginCard { }
+        }
+    }
+}
