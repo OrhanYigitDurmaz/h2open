@@ -103,9 +103,9 @@ skip_covered = false
 root_package = "app"
 
 [[tool.importlinter.contracts]]
-name = "Layers: main and cli > modules > core"
+name = "Layers: cli > main > modules > core"
 type = "layers"
-layers = ["app.main | app.cli", "app.modules", "app.core"]
+layers = ["app.cli", "app.main", "app.modules", "app.core"]
 
 [[tool.importlinter.contracts]]
 name = "Module internals (files starting with _) stay private"

@@ -7,7 +7,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from app import cli
 from app.core.ids import new_id
@@ -15,11 +15,21 @@ from app.modules.identity.api import Actor, Role, UserView
 from tests.modules.auth import CREDENTIAL, bearer, login, make_user
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from fastapi.testclient import TestClient
 
     from app.core.db import Database
 
 USERS = TypeAdapter(list[UserView])
+
+
+class OpenApi(BaseModel):
+    """The part of an OpenAPI description these tests look at."""
+
+    paths: dict[str, object]
+
+
 FRESH_CREDENTIAL = "brand new passphrase"
 
 
@@ -204,3 +214,20 @@ def test_cli_runs_as_a_module(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(SystemExit) as exit_info:
         _ = runpy.run_module("app.cli", run_name="__main__", alter_sys=True)
     assert exit_info.value.code == 0
+
+
+# Exporting the API description
+
+
+def test_cli_exports_the_openapi_description(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The file is written, then left alone while nothing changed."""
+    output = tmp_path / "docs" / "openapi.json"
+    assert cli.main(["export-openapi", "--output", str(output)]) == 0
+    assert capsys.readouterr().out == f"updated {output}\n"
+    spec = OpenApi.model_validate_json(output.read_bytes())
+    assert "/orders/{order_id}/claim" in spec.paths
+
+    assert cli.main(["export-openapi", "--output", str(output)]) == 0
+    assert capsys.readouterr().out == f"{output} is up to date\n"

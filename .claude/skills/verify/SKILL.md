@@ -1,12 +1,13 @@
 ---
 name: verify
-description: Run every lint, format, type, import-boundary and test check for the h2open backend (ruff, basedpyright, import-linter, pytest) and frontend (prettier, eslint, svelte-check), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
+description: Run every lint, format, type, import-boundary and test check for the h2open backend (ruff, basedpyright, import-linter, pytest) and frontend (prettier, eslint, svelte-check), regenerate the API docs (docs/openapi.json), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
 ---
 
 # Verify h2open
 
 Run all checks and report the results. This skill only reports: do not change
 code, loosen config, or add `# noqa` / `# pyright: ignore` unless the user asks.
+The one file it writes is the generated API description, `docs/openapi.json`.
 
 ## Checks
 
@@ -23,6 +24,14 @@ groups are independent and can run in parallel.
 | Types | `uv run basedpyright` |
 | Module boundaries | `uv run lint-imports` |
 | Tests | `uv run pytest -q` |
+| API docs | `uv run python -m app.cli export-openapi` |
+
+The API docs step writes `docs/openapi.json` (OpenAPI 3.1: every endpoint,
+request and response) from the code. It prints `updated …` when the API
+changed and `… is up to date` otherwise. An update is not a failure, but say
+so in the report: the file should be committed with the change, since the
+app developers and their agents read it from the repo. The step fails only if
+the command errors, e.g. because the app cannot be imported.
 
 ### Frontend (`frontend/`, SvelteKit via bun)
 
@@ -55,7 +64,7 @@ decides that.
 
 Start with a one-line verdict: everything passes, or how many checks failed.
 Then a table with one row per check (pass/fail, plus error count when failing).
-For each failure, list the file:line, the rule code and a short fix
-suggestion. Group repeated rule violations instead of listing each one.
+For the API docs row, say "updated" or "unchanged". For each failure, list the
+file:line, the rule code and a short fix suggestion. Group repeated rule violations instead of listing each one.
 Mention `uv run ruff check --fix .`, `uv run ruff format .` or `bun run format`
 when they would fix the reported issues automatically.
