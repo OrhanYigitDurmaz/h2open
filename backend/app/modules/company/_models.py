@@ -4,10 +4,10 @@
 
 from typing import ClassVar
 
-from sqlalchemy import CheckConstraint, Enum, MetaData, SmallInteger, false, text, true
+from sqlalchemy import CheckConstraint, MetaData, SmallInteger, false, text, true
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.core.db import module_metadata
+from app.core.db import enum_column, module_metadata
 from app.modules.company._views import DepositRefundPolicy
 
 SETTINGS_ROW_ID = 1
@@ -37,13 +37,7 @@ class Settings(Base):
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     deposit_refund_policy: Mapped[DepositRefundPolicy] = mapped_column(
-        Enum(
-            DepositRefundPolicy,
-            name="deposit_refund_policy",
-            native_enum=False,
-            create_constraint=True,
-            length=20,
-        )
+        enum_column(DepositRefundPolicy, "deposit_refund_policy")
     )
     walk_in_sales_enabled: Mapped[bool] = mapped_column(server_default=true())
     walk_in_deposits_allowed: Mapped[bool] = mapped_column(server_default=false())

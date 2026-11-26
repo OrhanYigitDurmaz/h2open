@@ -11,13 +11,12 @@ from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
 from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum,
     ForeignKey,
     Identity,
     MetaData,
@@ -27,7 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.core.db import module_metadata
+from app.core.db import enum_column, module_metadata
 from app.core.ids import new_id
 from app.modules.orders._views import (
     Channel,
@@ -37,14 +36,7 @@ from app.modules.orders._views import (
     PaymentMethod,
 )
 
-if TYPE_CHECKING:
-    from enum import StrEnum
-
 PRICE = Numeric(14, 4)
-
-
-def _enum(enum: type[StrEnum], name: str) -> Enum:
-    return Enum(enum, name=name, native_enum=False, create_constraint=True, length=20)
 
 
 class Base(DeclarativeBase):
@@ -77,13 +69,15 @@ class Order(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
     number: Mapped[int] = mapped_column(Identity(), unique=True)
     customer_id: Mapped[UUID | None] = mapped_column(index=True)
-    channel: Mapped[Channel] = mapped_column(_enum(Channel, "channel"))
-    fulfilment: Mapped[Fulfilment] = mapped_column(_enum(Fulfilment, "fulfilment"))
+    channel: Mapped[Channel] = mapped_column(enum_column(Channel, "channel"))
+    fulfilment: Mapped[Fulfilment] = mapped_column(
+        enum_column(Fulfilment, "fulfilment")
+    )
     status: Mapped[OrderStatus] = mapped_column(
-        _enum(OrderStatus, "order_status"), index=True
+        enum_column(OrderStatus, "order_status"), index=True
     )
     payment_method: Mapped[PaymentMethod] = mapped_column(
-        _enum(PaymentMethod, "payment_method")
+        enum_column(PaymentMethod, "payment_method")
     )
     address_id: Mapped[UUID | None] = mapped_column()
     address: Mapped[str | None] = mapped_column(String(300))
@@ -167,7 +161,9 @@ class ClaimEvent(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
     order_id: Mapped[UUID] = mapped_column(ForeignKey(Order.id), index=True)
-    action: Mapped[ClaimAction] = mapped_column(_enum(ClaimAction, "claim_action"))
+    action: Mapped[ClaimAction] = mapped_column(
+        enum_column(ClaimAction, "claim_action")
+    )
     driver_id: Mapped[UUID] = mapped_column()
     recorded_by: Mapped[UUID] = mapped_column()
     reason: Mapped[str | None] = mapped_column(String(500))

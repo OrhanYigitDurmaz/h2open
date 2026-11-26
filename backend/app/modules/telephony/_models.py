@@ -3,13 +3,12 @@
 """Telephony tables, in the ``telephony`` schema. Private to this module."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum,
     MetaData,
     SmallInteger,
     String,
@@ -17,18 +16,11 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.core.db import module_metadata
+from app.core.db import enum_column, module_metadata
 from app.core.ids import new_id
 from app.modules.telephony._views import CallStatus, EndReason, RingStrategy
 
-if TYPE_CHECKING:
-    from enum import StrEnum
-
 SETTINGS_ROW_ID = 1
-
-
-def _enum(enum: type[StrEnum], name: str) -> Enum:
-    return Enum(enum, name=name, native_enum=False, create_constraint=True, length=20)
 
 
 class Base(DeclarativeBase):
@@ -53,7 +45,7 @@ class Settings(Base):
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     ring_strategy: Mapped[RingStrategy] = mapped_column(
-        _enum(RingStrategy, "ring_strategy")
+        enum_column(RingStrategy, "ring_strategy")
     )
     driver_ring_delay_seconds: Mapped[int] = mapped_column()
     ring_timeout_seconds: Mapped[int] = mapped_column()
@@ -73,11 +65,13 @@ class Call(Base):
     customer_id: Mapped[UUID | None] = mapped_column(index=True)
     customer_name: Mapped[str | None] = mapped_column(String(200))
     status: Mapped[CallStatus] = mapped_column(
-        _enum(CallStatus, "call_status"), index=True
+        enum_column(CallStatus, "call_status"), index=True
     )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     answered_by: Mapped[str | None] = mapped_column(String(100))
     answered_by_user: Mapped[UUID | None] = mapped_column()
-    end_reason: Mapped[EndReason | None] = mapped_column(_enum(EndReason, "end_reason"))
+    end_reason: Mapped[EndReason | None] = mapped_column(
+        enum_column(EndReason, "end_reason")
+    )

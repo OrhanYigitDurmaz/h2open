@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run every lint, format, type, import-boundary and test check for the h2open backend (ruff, basedpyright, import-linter, pytest) and frontend (prettier, eslint, svelte-check), regenerate the API docs (docs/openapi.json), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
+description: Run every lint, format, type, import-boundary and test check for the h2open backend (ruff, basedpyright, import-linter, pytest) and frontend (prettier, eslint, svelte-check), regenerate the API docs (docs/openapi.json), look for duplicated code (jscpd), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
 ---
 
 # Verify h2open
@@ -42,6 +42,36 @@ the command errors, e.g. because the app cannot be imported.
 
 If `frontend/node_modules` is missing, run `bun install` first and say so.
 
+### Whole repository (repo root)
+
+| Check | Command |
+|---|---|
+| Duplicate code | see below |
+
+```sh
+bunx jscpd@5.4.3 --min-lines 4 --min-tokens 50 --reporters console \
+  --ignore "**/node_modules/**,**/.venv/**,**/migrations/versions/**,**/__pycache__/**,docs/**" \
+  backend/app backend/tests frontend/src
+```
+
+jscpd finds blocks of code repeated across files (by tokens, so renamed
+variables still match). The version is pinned: before raising it, check the
+new release is at least 7 days old, like any other dependency. Generated
+migrations and `docs/` are skipped, since they repeat by design.
+
+This step only reports; it never fails the run. Two clones are known and
+intended, so mention them only if they change:
+
+- `customers/_models.py` and `orders/_models.py`: the order keeps its own
+  copy of the delivery address, so editing a customer later does not change
+  past orders.
+- `purchasing/_models.py` (receipts and payments): each table has its own
+  "recorded/voided by" audit columns; modules own their tables.
+
+For any other clone, say where it is and whether it is worth merging. Merge
+real copies (shared test setup, a helper written twice); keep repetition
+that keeps modules independent (each module's own tables, settings, API).
+
 Backend tests need Postgres. If `docker compose ps postgres` shows it is not
 running, start it with `docker compose up -d --wait postgres` (from the repo
 root) and say so. Tests use a separate `<POSTGRES_DB>_test` database that
@@ -64,7 +94,8 @@ decides that.
 
 Start with a one-line verdict: everything passes, or how many checks failed.
 Then a table with one row per check (pass/fail, plus error count when failing).
-For the API docs row, say "updated" or "unchanged". For each failure, list the
+For the API docs row, say "updated" or "unchanged". For the duplicate code
+row, give the number of clones and whether any are new. For each failure, list the
 file:line, the rule code and a short fix suggestion. Group repeated rule violations instead of listing each one.
 Mention `uv run ruff check --fix .`, `uv run ruff format .` or `bun run format`
 when they would fix the reported issues automatically.

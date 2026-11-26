@@ -9,14 +9,13 @@ they are plain IDs.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
-    Enum,
     ForeignKey,
     Index,
     MetaData,
@@ -26,18 +25,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.core.db import module_metadata
+from app.core.db import enum_column, module_metadata
 from app.core.ids import new_id
 from app.modules.purchasing._views import LineKind, SupplierPaymentMethod
 
-if TYPE_CHECKING:
-    from enum import StrEnum
-
 AMOUNT = Numeric(14, 2)
-
-
-def _enum(enum: type[StrEnum], name: str) -> Enum:
-    return Enum(enum, name=name, native_enum=False, create_constraint=True, length=20)
 
 
 class Base(DeclarativeBase):
@@ -115,7 +107,7 @@ class ReceiptLine(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
     receipt_id: Mapped[UUID] = mapped_column(ForeignKey(Receipt.id), index=True)
-    kind: Mapped[LineKind] = mapped_column(_enum(LineKind, "line_kind"))
+    kind: Mapped[LineKind] = mapped_column(enum_column(LineKind, "line_kind"))
     product_id: Mapped[UUID | None] = mapped_column()
     container_type_id: Mapped[UUID | None] = mapped_column()
     """For goods: the product's container type at the time, if returnable."""
@@ -161,7 +153,7 @@ class Payment(Base):
     amount: Mapped[Decimal] = mapped_column(AMOUNT)
     currency: Mapped[str] = mapped_column(String(3))
     method: Mapped[SupplierPaymentMethod] = mapped_column(
-        _enum(SupplierPaymentMethod, "supplier_payment_method")
+        enum_column(SupplierPaymentMethod, "supplier_payment_method")
     )
     paid_on: Mapped[date] = mapped_column(Date)
     reference: Mapped[str | None] = mapped_column(String(100))

@@ -10,10 +10,8 @@ from pydantic import TypeAdapter
 
 from app.modules.inventory.api import ItemKind, MovementView, StockLevelView
 from tests.modules.catalog.helpers import (
-    create_brand,
-    create_container_type,
-    create_product,
-    try_,
+    create_carboy_water,
+    create_priced_product,
 )
 
 if TYPE_CHECKING:
@@ -80,33 +78,14 @@ class Goods:
         assert response.status_code == HTTPStatus.OK
 
 
-def _priced(client: TestClient, body: dict[str, object], price: str) -> EntityId:
-    product = create_product(client, body)
-    response = client.post(
-        f"/catalog/products/{product.id}/prices", json={"price": try_(price)}
-    )
-    assert response.status_code == HTTPStatus.CREATED
-    return product.id
-
-
 def make_goods(client: TestClient) -> Goods:
     """Set up the products.
 
     Returns:
         The goods.
     """
-    brand = create_brand(client)
-    carboy = create_container_type(client, brand)
-    container = {"container_type_id": str(carboy.id), "quantity": 1}
-    water = _priced(
-        client,
-        {
-            "sku": "A-19L",
-            "name": "Brand A 19 L",
-            "brand_id": str(brand.id),
-            "container": container,
-        },
-        "100",
+    carboy, water = create_carboy_water(client)
+    cups = create_priced_product(
+        client, {"sku": "CUP", "name": "Cups", "vat_rate": "20"}, "20"
     )
-    cups = _priced(client, {"sku": "CUP", "name": "Cups", "vat_rate": "20"}, "20")
-    return Goods(client, carboy.id, water, cups)
+    return Goods(client, carboy, water, cups)

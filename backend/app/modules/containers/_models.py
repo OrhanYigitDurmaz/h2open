@@ -7,10 +7,10 @@ from decimal import Decimal
 from typing import ClassVar
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, MetaData, Numeric, String
+from sqlalchemy import CheckConstraint, DateTime, MetaData, Numeric, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.core.db import module_metadata
+from app.core.db import enum_column, module_metadata
 from app.core.ids import new_id
 from app.modules.containers._views import MovementKind
 
@@ -43,13 +43,7 @@ class Movement(Base):
     customer_id: Mapped[UUID] = mapped_column(index=True)
     container_type_id: Mapped[UUID] = mapped_column()
     kind: Mapped[MovementKind] = mapped_column(
-        Enum(
-            MovementKind,
-            name="movement_kind",
-            native_enum=False,
-            create_constraint=True,
-            length=20,
-        )
+        enum_column(MovementKind, "movement_kind")
     )
     quantity: Mapped[int] = mapped_column()
     balance_change: Mapped[int] = mapped_column()

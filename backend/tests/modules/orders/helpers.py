@@ -13,9 +13,8 @@ from app.core.money import Money
 from app.modules.customers.api import CustomerView
 from app.modules.orders.api import OrderView
 from tests.modules.catalog.helpers import (
-    create_brand,
-    create_container_type,
-    create_product,
+    create_carboy_water,
+    create_priced_product,
     try_,
 )
 
@@ -154,47 +153,23 @@ def returns_json(counts: dict[EntityId, int]) -> list[dict[str, object]]:
     return [{"container_type_id": str(t), "quantity": q} for t, q in counts.items()]
 
 
-def priced(client: TestClient, body: dict[str, object], price: str) -> EntityId:
-    """Create a product and give it a price.
-
-    Returns:
-        The product's ID.
-    """
-    product = create_product(client, body)
-    response = client.post(
-        f"/catalog/products/{product.id}/prices", json={"price": try_(price)}
-    )
-    assert response.status_code == HTTPStatus.CREATED
-    return product.id
-
-
 def make_shop(client: TestClient) -> Shop:
     """Set up the test shop through the API.
 
     Returns:
         The shop.
     """
-    brand = create_brand(client)
-    carboy = create_container_type(client, brand)
+    carboy, water = create_carboy_water(client)
     deposit = client.post(
-        f"/catalog/container-types/{carboy.id}/deposits", json={"price": try_("200")}
+        f"/catalog/container-types/{carboy}/deposits", json={"price": try_("200")}
     )
     assert deposit.status_code == HTTPStatus.CREATED
-    container = {"container_type_id": str(carboy.id), "quantity": 1}
-    water = priced(
-        client,
-        {
-            "sku": "A-19L",
-            "name": "Brand A 19 L",
-            "brand_id": str(brand.id),
-            "container": container,
-        },
-        "100",
-    )
-    pack = priced(
+    pack = create_priced_product(
         client, {"sku": "A-12", "name": "12 x 500 ml", "vat_rate": "10"}, "60"
     )
-    cups = priced(client, {"sku": "CUP", "name": "Cups", "vat_rate": "20"}, "20")
+    cups = create_priced_product(
+        client, {"sku": "CUP", "name": "Cups", "vat_rate": "20"}, "20"
+    )
     response = client.post(
         "/customers",
         json={
@@ -210,4 +185,4 @@ def make_shop(client: TestClient) -> Shop:
         },
     )
     customer = CustomerView.model_validate_json(response.content)
-    return Shop(client, carboy.id, water, pack, cups, customer)
+    return Shop(client, carboy, water, pack, cups, customer)

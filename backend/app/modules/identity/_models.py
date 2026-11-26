@@ -9,7 +9,6 @@ from uuid import UUID
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    Enum,
     ForeignKey,
     Index,
     MetaData,
@@ -20,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from app.core.db import module_metadata
+from app.core.db import enum_column, module_metadata
 from app.core.ids import new_id
 from app.modules.identity._views import Platform, Role
 
@@ -60,7 +59,7 @@ class UserRole(Base):
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey(User.id), primary_key=True)
     role: Mapped[Role] = mapped_column(
-        Enum(Role, name="role", native_enum=False, create_constraint=True, length=20),
+        enum_column(Role, "role"),
         primary_key=True,
     )
 
@@ -108,15 +107,7 @@ class Session(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
     user_id: Mapped[UUID] = mapped_column(ForeignKey(User.id), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
-    platform: Mapped[Platform] = mapped_column(
-        Enum(
-            Platform,
-            name="platform",
-            native_enum=False,
-            create_constraint=True,
-            length=20,
-        )
-    )
+    platform: Mapped[Platform] = mapped_column(enum_column(Platform, "platform"))
     client_name: Mapped[str | None] = mapped_column(String(100))
     fcm_token: Mapped[str | None] = mapped_column(String(4096))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

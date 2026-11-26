@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Annotated, Self, TypedDict, cast
 
 from fastapi import Depends, Request
-from sqlalchemy import MetaData
+from sqlalchemy import Enum, MetaData
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+    from enum import StrEnum
 
     from sqlalchemy import URL
 
@@ -47,6 +48,22 @@ def module_metadata(schema: str) -> MetaData:
         Metadata that puts every table in ``schema``.
     """
     return MetaData(schema=schema, naming_convention=NAMING_CONVENTION)
+
+
+def enum_column(enum: type[StrEnum], name: str) -> Enum:
+    """The column type for a string enum, the same in every module.
+
+    Members are stored by name in a ``VARCHAR(20)`` with a CHECK constraint,
+    not as a Postgres enum type, so adding a member is a simple migration.
+
+    Args:
+        enum: The enum class.
+        name: The constraint's name, e.g. ``"order_status"``.
+
+    Returns:
+        The column type.
+    """
+    return Enum(enum, name=name, native_enum=False, create_constraint=True, length=20)
 
 
 class Database:
