@@ -8,7 +8,7 @@
 #include <QUrl>
 
 #include <cstdint>
-#include <optional>
+#include <expected>
 
 class QNetworkReply;
 
@@ -43,16 +43,25 @@ struct LoginFailure {
 };
 
 /// What to tell the user about a failed login.
-[[nodiscard]] QString message(const LoginFailure &failure);
+[[nodiscard]] QString message(LoginFailure failure);
 
-/// What a login answer's status means: nothing for success, else the failure.
+/// What a login answer's status means: success, or the failure.
 ///
 /// 401 is a wrong username or password, or a locked account; 422 is a
 /// password longer than any valid one, so it is the same to the user.
-[[nodiscard]] std::optional<LoginFailure> checkLoginStatus(int status);
+[[nodiscard]] std::expected<void, LoginFailure> checkLoginStatus(int status);
 
-/// Read the server's login result; nothing if it is not one.
-[[nodiscard]] std::optional<Session> parseSession(const QByteArray &body);
+/// What is wrong with a body that is not a login result.
+enum class SessionError : std::uint8_t {
+    /// Not a JSON object.
+    NotAnObject,
+    MissingToken,
+    MissingUsername,
+};
+
+/// Read the server's login result. The body comes from the network, so
+/// anything may arrive; `fuzz/parse_session.cpp` checks that.
+[[nodiscard]] std::expected<Session, SessionError> parseSession(const QByteArray &body);
 
 /// The login request body, as the desktop app.
 [[nodiscard]] QByteArray loginBody(const QString &username, const QString &password,
@@ -89,7 +98,7 @@ public:
 
 signals:
     void loggedIn(const h2open::Session &session);
-    void loginFailed(const h2open::LoginFailure &failure);
+    void loginFailed(h2open::LoginFailure failure);
 
 private:
     [[nodiscard]] QUrl endpoint(const QString &path) const;

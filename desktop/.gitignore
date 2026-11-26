@@ -1,2 +1,7 @@
 # CMake build trees (see CMakePresets.json).
 /build/
+# libFuzzer findings (crash-*, leak-*, timeout-*) and working corpora.
+crash-*
+leak-*
+timeout-*
+oom-*

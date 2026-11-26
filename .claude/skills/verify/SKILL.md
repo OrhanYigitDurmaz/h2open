@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run every lint, format, type, import-boundary, dependency and test check for the h2open backend (ruff, basedpyright, import-linter, pytest), frontend (prettier, eslint, svelte-check) and desktop app (CMake build with warnings as errors, Qt Test, clang-format, clang-tidy), regenerate the API docs (docs/openapi.json), look for duplicated code (jscpd), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
+description: Run every lint, format, type, import-boundary, dependency and test check for the h2open backend (ruff, basedpyright, import-linter, pytest), frontend (prettier, eslint, svelte-check) and desktop app (Clang and GCC builds with warnings as errors, Qt Test under ASan/UBSan and TSan, clang-format, clang-tidy, clazy, libFuzzer), regenerate the API docs (docs/openapi.json), look for duplicated code (jscpd), then report what fails. Use when the user runs /verify or asks to verify, check or validate the code, and before committing changes.
 ---
 
 # Verify h2open
@@ -46,25 +46,44 @@ If `frontend/node_modules` is missing, run `bun install` first and say so.
 
 | Check | Command |
 |---|---|
-| Configure | `cmake --preset dev` |
-| Build (warnings are errors) | `cmake --build --preset dev` |
-| Tests | `ctest --preset dev` |
-| Format | `clang-format --dry-run --Werror src/* tests/*` |
-| Lint | `clang-tidy -p build/dev --quiet src/*.cpp tests/*.cpp` |
-| Build with GCC | `cmake --preset release && cmake --build --preset release` |
+| Build: Clang, ASan + UBSan, warnings as errors | `cmake --preset dev && cmake --build --preset dev` |
+| Tests under ASan + UBSan | `ctest --preset dev` |
+| Tests under TSan | `cmake --preset tsan && cmake --build --preset tsan && ctest --preset tsan` |
+| Build + tests with GCC | `cmake --preset release && cmake --build --preset release && ctest --preset release` |
+| Format | `clang-format --dry-run --Werror src/* tests/*.cpp fuzz/*.cpp` |
+| Lint | `clang-tidy -p build/dev --quiet src/*.cpp tests/*.cpp fuzz/*.cpp` |
+| Qt lint (clazy) | `cmake --build --preset dev --target clazy` |
+| Fuzz | `cmake --preset fuzz && cmake --build --preset fuzz`, then for each `build/fuzz/fuzz_*`: copy `fuzz/corpus/<name>/` to a scratch directory and run `<binary> -max_total_time=30 <that directory>` |
 
-The `dev` preset builds with Clang, because clang-tidy reads its compile
-commands (`build/dev/compile_commands.json`); the `release` preset uses the
-default compiler (GCC here), so both compilers see the code. Warnings live in
-`h2open_options` in `CMakeLists.txt` (`-Wall -Wextra -Wpedantic -Wconversion
--Wshadow -Wold-style-cast …` with `-Werror`), and Qt string macros
-(`QT_NO_CAST_FROM_ASCII` …) make every string literal say its encoding
-(`u"…"_s`). Lints live in `.clang-tidy` (broad groups as errors; the
-exceptions and their reasons are listed there) and `tests/.clang-tidy`.
+Rules for writing the code are in `desktop/AGENTS.md`; the checks enforce
+most of them. What each one covers:
 
-Qt itself comes from the system (Arch: `qt6-base`; Windows: the Qt online
-installer), not from a package manager with a lockfile, so there is no
-dependency audit step for the desktop app.
+- **Compiler** (`h2open_options` in `CMakeLists.txt`): `-Wall -Wextra
+  -Wpedantic -Wconversion -Wshadow -Wold-style-cast …` with `-Werror`, plus
+  Clang's `-Wunsafe-buffer-usage` (no raw pointer arithmetic; moc output is
+  exempt). `_GLIBCXX_ASSERTIONS` (and the libc++ equivalent) make
+  out-of-range `[]`, `front()` on empty containers and similar abort. Qt
+  macros (`QT_NO_CAST_FROM_ASCII`, `QT_DISABLE_DEPRECATED_UP_TO` …) refuse
+  implicit string conversions and deprecated APIs.
+- **Sanitizers**: `dev` builds everything with ASan + UBSan (leaks
+  included, and any finding stops the program). `tsan` uses ThreadSanitizer,
+  which cannot be combined with ASan. Qt, GLib and D-Bus are not
+  instrumented, so `tests/tsan.supp` hides races *inside* those libraries
+  only. Never add suppressions for our own code.
+- **clang-tidy** (`.clang-tidy`): broad groups as errors, including
+  `concurrency-*`; the exceptions and their reasons are listed in the file.
+- **clazy**: level0–2 plus some manual checks (the list is in
+  `CMakeLists.txt`), with warnings as errors.
+- **Fuzzing**: one harness per parser of untrusted input, in `fuzz/`. A
+  crash writes `crash-*` in the working directory; report the input and the
+  sanitizer output. Do not run the fuzzer inside `fuzz/corpus/` itself, so
+  the seed corpus stays small.
+
+All builds live in `desktop/build/<preset>/` (ignored by git). Qt itself comes
+from the system (Arch: `qt6-base`; Windows: the Qt online installer), not
+from a package manager with a lockfile, so there is no dependency audit step
+for the desktop app. clazy comes from the `clazy` package; if
+`clazy-standalone` is missing, say so instead of skipping the check silently.
 
 ### Whole repository (repo root)
 
@@ -124,5 +143,5 @@ For the API docs row, say "updated" or "unchanged". For the duplicate code
 row, give the number of clones and whether any are new. For each failure, list the
 file:line, the rule code and a short fix suggestion. Group repeated rule violations instead of listing each one.
 Mention `uv run ruff check --fix .`, `uv run ruff format .`, `bun run format`,
-`clang-format -i src/* tests/*` (in `desktop/`)
+`clang-format -i src/* tests/*.cpp fuzz/*.cpp` (in `desktop/`)
 when they would fix the reported issues automatically.

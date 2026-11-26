@@ -33,7 +33,7 @@ QNetworkRequest jsonRequest(const QUrl &url)
 
 } // namespace
 
-QString message(const LoginFailure &failure)
+QString message(LoginFailure failure)
 {
     switch (failure.reason) {
     case LoginFailure::Reason::Refused:
@@ -47,26 +47,32 @@ QString message(const LoginFailure &failure)
     return {};
 }
 
-std::optional<LoginFailure> checkLoginStatus(int status)
+std::expected<void, LoginFailure> checkLoginStatus(int status)
 {
     if (status >= 200 && status < 300) {
-        return std::nullopt;
+        return {};
     }
     if (status == 401 || status == 422) {
-        return LoginFailure{.reason = LoginFailure::Reason::Refused};
+        return std::unexpected(LoginFailure{.reason = LoginFailure::Reason::Refused});
     }
-    return LoginFailure{.reason = LoginFailure::Reason::Server, .status = status};
+    return std::unexpected(LoginFailure{.reason = LoginFailure::Reason::Server, .status = status});
 }
 
-std::optional<Session> parseSession(const QByteArray &body)
+std::expected<Session, SessionError> parseSession(const QByteArray &body)
 {
     const QJsonDocument document = QJsonDocument::fromJson(body);
+    if (!document.isObject()) {
+        return std::unexpected(SessionError::NotAnObject);
+    }
     const QJsonObject root = document.object();
-    const QJsonObject user = root.value(u"user").toObject();
     const QString token = root.value(u"token").toString();
+    if (token.isEmpty()) {
+        return std::unexpected(SessionError::MissingToken);
+    }
+    const QJsonObject user = root.value(u"user").toObject();
     const QString username = user.value(u"username").toString();
-    if (token.isEmpty() || username.isEmpty()) {
-        return std::nullopt;
+    if (username.isEmpty()) {
+        return std::unexpected(SessionError::MissingUsername);
     }
     return Session{
         .token = token,
@@ -127,13 +133,14 @@ void ApiClient::login(const QString &username, const QString &password)
             emit loginFailed({.reason = LoginFailure::Reason::Unreachable});
             return;
         }
-        if (const auto failure = checkLoginStatus(status.toInt())) {
-            emit loginFailed(*failure);
+        if (const auto checked = checkLoginStatus(status.toInt()); !checked) {
+            emit loginFailed(checked.error());
             return;
         }
         if (const auto session = parseSession(reply->readAll())) {
             emit loggedIn(*session);
         } else {
+            // A 2xx answer that is not a login result.
             emit loginFailed({.reason = LoginFailure::Reason::Server, .status = status.toInt()});
         }
     });

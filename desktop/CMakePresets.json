@@ -2,42 +2,52 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "dev",
-      "displayName": "Debug build with Clang and Ninja (clang-tidy reads it)",
+      "name": "clang",
+      "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/dev",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_COMPILER": "clang++"
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
+      "name": "dev",
+      "inherits": "clang",
+      "displayName": "Clang debug build with ASan + UBSan (clang-tidy and clazy read it)",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": { "H2OPEN_SANITIZE": "address,undefined" }
+    },
+    {
+      "name": "tsan",
+      "inherits": "clang",
+      "displayName": "Clang debug build with ThreadSanitizer (cannot be combined with ASan)",
+      "binaryDir": "${sourceDir}/build/tsan",
+      "cacheVariables": { "H2OPEN_SANITIZE": "thread" }
+    },
+    {
+      "name": "fuzz",
+      "inherits": "clang",
+      "displayName": "Clang libFuzzer harnesses with ASan + UBSan",
+      "binaryDir": "${sourceDir}/build/fuzz",
+      "cacheVariables": { "H2OPEN_SANITIZE": "address,undefined", "H2OPEN_FUZZ": "ON" }
+    },
+    {
       "name": "release",
-      "displayName": "Release build with Ninja",
+      "displayName": "Release build with the default compiler (GCC on Linux)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/release",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     }
   ],
   "buildPresets": [
-    {
-      "name": "dev",
-      "configurePreset": "dev"
-    },
-    {
-      "name": "release",
-      "configurePreset": "release"
-    }
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "tsan", "configurePreset": "tsan" },
+    { "name": "fuzz", "configurePreset": "fuzz" },
+    { "name": "release", "configurePreset": "release" }
   ],
   "testPresets": [
-    {
-      "name": "dev",
-      "configurePreset": "dev",
-      "output": {
-        "outputOnFailure": true
-      }
-    }
+    { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
+    { "name": "tsan", "configurePreset": "tsan", "output": { "outputOnFailure": true } },
+    { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } }
   ]
 }

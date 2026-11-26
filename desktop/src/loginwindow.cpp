@@ -43,6 +43,11 @@ LoginWindow::LoginWindow(QWidget *parent)
     brand->setForegroundRole(QPalette::Highlight);
     auto *hint = new DimLabel(u"Use the account your admin gave you."_s, card);
 
+    // Names for tests (and accessibility tools) to find the parts by.
+    m_username->setObjectName(u"username"_s);
+    m_password->setObjectName(u"password"_s);
+    m_error->setObjectName(u"error"_s);
+    m_submit->setObjectName(u"submit"_s);
     m_password->setEchoMode(QLineEdit::Password);
     m_error->setWordWrap(true);
     m_error->setStyleSheet(u"color: #d92d20;"_s);
@@ -91,7 +96,7 @@ void LoginWindow::showError(const QString &message)
     m_password->setFocus();
 }
 
-void LoginWindow::reset()
+void LoginWindow::clearForm()
 {
     setBusy(false);
     m_error->hide();

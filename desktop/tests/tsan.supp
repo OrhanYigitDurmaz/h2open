@@ -1,0 +1,20 @@
+# ThreadSanitizer suppressions for the tsan preset.
+#
+# Qt, GLib and D-Bus come from the system, built without TSan, so TSan cannot
+# see the locks inside them and reports their internal threads (such as
+# QNetworkAccessManager's) as racing. These lines hide only what happens
+# inside those libraries; a race with a frame in our code is still reported.
+called_from_lib:libQt6Core.so
+called_from_lib:libQt6Network.so
+called_from_lib:libQt6Gui.so
+called_from_lib:libQt6Widgets.so
+called_from_lib:libQt6DBus.so
+called_from_lib:libglib-2.0.so
+called_from_lib:libdbus-1.so
+called_from_lib:libQt6Test.so
+called_from_lib:libstdc++.so
+race:libQt6Core.so
+race:libQt6Network.so
+race:libglib-2.0.so
+# Qt leaves its internal worker threads (network, D-Bus) running at exit.
+thread:libQt6Core.so

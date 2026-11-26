@@ -3,28 +3,21 @@
 #pragma once
 
 #include "api.h"
+#include "loginwindow.h"
+#include "mainwindow.h"
+#include "qtmemory.h"
 
 #include <QObject>
-#include <QPointer>
 
 #include <optional>
 
 namespace h2open {
-
-class LoginWindow;
-class MainWindow;
 
 class DesktopApp : public QObject {
     Q_OBJECT
 
 public:
     explicit DesktopApp(QObject *parent = nullptr);
-    ~DesktopApp() override;
-
-    DesktopApp(const DesktopApp &) = delete;
-    DesktopApp &operator=(const DesktopApp &) = delete;
-    DesktopApp(DesktopApp &&) = delete;
-    DesktopApp &operator=(DesktopApp &&) = delete;
 
     /// Show the login window.
     void start();
@@ -36,8 +29,9 @@ private:
     void quitLoggedIn();
 
     ApiClient m_client;
-    LoginWindow *m_login;
-    QPointer<MainWindow> m_main;
+    /// Top-level windows have no parent, so they are owned here.
+    QObjectPtr<LoginWindow> m_login;
+    QObjectPtr<MainWindow> m_main;
     /// The login in use. The token is kept in memory only.
     std::optional<Session> m_session;
 };

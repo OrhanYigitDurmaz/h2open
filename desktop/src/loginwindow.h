@@ -20,7 +20,7 @@ public:
     /// Show why the login failed, clear the password and focus it.
     void showError(const QString &message);
     /// Ready for the next login: no error, no password.
-    void reset();
+    void clearForm();
 
 signals:
     void submitted(const QString &username, const QString &password);
