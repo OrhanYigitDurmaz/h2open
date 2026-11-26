@@ -48,6 +48,12 @@ class PushTokenUpdate(BaseModel):
     """``null`` stops push messages to this login."""
 
 
+class ShiftUpdate(BaseModel):
+    """A driver starting or ending their shift."""
+
+    on_shift: bool
+
+
 class PasswordChange(BaseModel):
     """A user changing their own password."""
 
@@ -73,6 +79,8 @@ class UserUpdate(BaseModel):
     name: Name | None = None
     roles: Roles | None = None
     active: bool | None = None
+    on_shift: bool | None = None
+    """E.g. ``false`` to end a shift a driver forgot to end."""
 
 
 class SecuritySettingsUpdate(BaseModel):

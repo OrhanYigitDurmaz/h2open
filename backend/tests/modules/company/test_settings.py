@@ -20,6 +20,8 @@ def test_defaults_until_changed(client: TestClient) -> None:
         walk_in_sales_enabled=True,
         walk_in_deposits_allowed=False,
         negative_stock_allowed=True,
+        unclaimed_alert_minutes=15,
+        uncompleted_alert_minutes=120,
     )
 
 
@@ -64,6 +66,24 @@ def test_change_negative_stock(client: TestClient) -> None:
     assert SettingsView.model_validate_json(
         response.content
     ).negative_stock_allowed is (False)
+
+
+def test_change_delivery_alerts(client: TestClient) -> None:
+    """Both delivery alert thresholds are adjustable, from 1 minute to a day."""
+    response = client.patch(
+        "/company/settings",
+        json={"unclaimed_alert_minutes": 10, "uncompleted_alert_minutes": 90},
+    )
+    settings = SettingsView.model_validate_json(response.content)
+    assert (settings.unclaimed_alert_minutes, settings.uncompleted_alert_minutes) == (
+        10,
+        90,
+    )
+    for bad in (0, 1441):
+        response = client.patch(
+            "/company/settings", json={"unclaimed_alert_minutes": bad}
+        )
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
 
 
 def test_unknown_policy_is_rejected(client: TestClient) -> None:

@@ -29,7 +29,13 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.core.db import module_metadata
 from app.core.ids import new_id
-from app.modules.orders._views import Channel, Fulfilment, OrderStatus, PaymentMethod
+from app.modules.orders._views import (
+    Channel,
+    ClaimAction,
+    Fulfilment,
+    OrderStatus,
+    PaymentMethod,
+)
 
 if TYPE_CHECKING:
     from enum import StrEnum
@@ -59,6 +65,10 @@ class Order(Base):
         CheckConstraint(
             "customer_id IS NOT NULL OR payment_method <> 'ON_ACCOUNT'",
             name="on_account_has_customer",
+        ),
+        CheckConstraint(
+            "fulfilment = 'DELIVERY' OR (claimed_by IS NULL AND pooled_at IS NULL)",
+            name="only_deliveries_are_claimed",
         ),
     )
     # Read the database-generated order number back right after insert.
@@ -93,6 +103,11 @@ class Order(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_reason: Mapped[str | None] = mapped_column(String(500))
+    claimed_by: Mapped[UUID | None] = mapped_column(index=True)
+    """The driver holding the delivery (identity module)."""
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pooled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """When an open, unclaimed delivery entered the pool; ``None`` otherwise."""
 
     lines: Mapped[list[OrderLine]] = relationship(
         order_by="OrderLine.id", cascade="all, delete-orphan"
@@ -143,3 +158,17 @@ class OrderReturn(Base):
     container_type_id: Mapped[UUID] = mapped_column()
     expected_quantity: Mapped[int] = mapped_column()
     returned_quantity: Mapped[int | None] = mapped_column()
+
+
+class ClaimEvent(Base):
+    """One step in who has held a delivery. Append-only."""
+
+    __tablename__: str = "claim_events"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    order_id: Mapped[UUID] = mapped_column(ForeignKey(Order.id), index=True)
+    action: Mapped[ClaimAction] = mapped_column(_enum(ClaimAction, "claim_action"))
+    driver_id: Mapped[UUID] = mapped_column()
+    recorded_by: Mapped[UUID] = mapped_column()
+    reason: Mapped[str | None] = mapped_column(String(500))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

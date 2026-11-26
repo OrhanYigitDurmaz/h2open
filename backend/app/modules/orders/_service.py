@@ -3,26 +3,35 @@
 """Order logic. Private to this module."""
 
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
-from app.core.errors import ConflictError, DomainError, NotFoundError
+from app.core.errors import (
+    ConflictError,
+    DomainError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from app.core.ids import new_id
 from app.core.money import Money
 from app.modules.catalog import api as catalog
 from app.modules.company import api as company
 from app.modules.containers import api as containers
 from app.modules.customers import api as customers
+from app.modules.identity import api as identity
 from app.modules.inventory import api as inventory
-from app.modules.orders._models import Order, OrderLine, OrderReturn
+from app.modules.orders._models import ClaimEvent, Order, OrderLine, OrderReturn
 from app.modules.orders._views import (
+    ClaimAction,
+    ClaimEventView,
     ContainerReturnView,
     DeliveryAddressView,
     Fulfilment,
+    OrderAlerts,
     OrderLineView,
     OrderStatus,
     OrderView,
@@ -32,6 +41,7 @@ from app.modules.orders._views import (
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from sqlalchemy import Select
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.core.ids import EntityId
@@ -42,6 +52,8 @@ if TYPE_CHECKING:
         OrderCreate,
         OrderSearch,
         OrderUpdate,
+        Release,
+        TakeBack,
     )
 
 HUNDRED = Decimal(100)
@@ -145,6 +157,9 @@ def _order_view(order: Order) -> OrderView:
         cancelled_at=order.cancelled_at,
         cancelled_by=order.cancelled_by,
         cancel_reason=order.cancel_reason,
+        claimed_by=order.claimed_by,
+        claimed_at=order.claimed_at,
+        waiting_since=order.pooled_at,
     )
 
 
@@ -356,6 +371,8 @@ async def create_order(
         created_at=_now(),
         created_by=actor_id,
     )
+    if data.fulfilment is Fulfilment.DELIVERY:
+        order.pooled_at = order.created_at
     if data.address_id is not None:
         _set_address(order, customer, data.address_id)
     await _set_lines(session, order, data.lines)
@@ -391,6 +408,8 @@ async def list_orders(session: AsyncSession, search: OrderSearch) -> list[OrderV
         query = query.where(Order.fulfilment == search.fulfilment)
     if search.customer_id is not None:
         query = query.where(Order.customer_id == search.customer_id)
+    if search.claimed_by is not None:
+        query = query.where(Order.claimed_by == search.claimed_by)
     return [_order_view(order) for order in await session.scalars(query)]
 
 
@@ -435,6 +454,7 @@ async def cancel_order(
     """
     order = await _load_open(session, order_id)
     order.status = OrderStatus.CANCELLED
+    order.pooled_at = None
     order.cancelled_at = _now()
     order.cancel_reason = data.reason
     order.cancelled_by = actor_id
@@ -579,6 +599,260 @@ async def complete_order(
     await _exchange_containers(session, order, returned, actor_id)
     await _take_from_stock(session, order, actor_id)
     order.completed_by = actor_id
+    order.pooled_at = None
     order.status = OrderStatus.COMPLETED
     order.completed_at = _now()
     return await _save(session, order)
+
+
+def _is_staff(actor: identity.Actor) -> bool:
+    return actor.has(identity.Role.STAFF) or actor.has(identity.Role.ADMIN)
+
+
+async def complete_as(
+    session: AsyncSession,
+    order_id: EntityId,
+    data: OrderCompletion,
+    actor: identity.Actor,
+) -> OrderView:
+    """Complete an order on behalf of a logged-in user.
+
+    Staff complete any order; a driver only the deliveries they hold.
+
+    Returns:
+        The completed order.
+
+    Raises:
+        PermissionDeniedError: A driver completing an order they don't hold.
+    """
+    if not _is_staff(actor):
+        order = await _load_open(session, order_id)
+        if order.claimed_by != actor.id:
+            msg = f"claim order #{order.number} before completing it"
+            raise PermissionDeniedError(msg)
+    return await complete_order(session, order_id, data, actor.id)
+
+
+# The delivery pool
+
+
+def _event(
+    order: Order, action: ClaimAction, driver_id: EntityId, actor_id: EntityId
+) -> ClaimEvent:
+    return ClaimEvent(
+        id=new_id(),
+        order_id=order.id,
+        action=action,
+        driver_id=driver_id,
+        recorded_by=actor_id,
+        occurred_at=_now(),
+    )
+
+
+async def _why_not_claimed(
+    session: AsyncSession, order_id: EntityId, actor: identity.Actor
+) -> NoReturn:
+    """Explain why a claim found nothing to take.
+
+    Raises:
+        DomainError: The order is a pickup.
+        ConflictError: Someone already holds it.
+    """
+    order = await _load_open(session, order_id)
+    if order.fulfilment is not Fulfilment.DELIVERY:
+        msg = f"order #{order.number} is a pickup, not a delivery"
+        raise DomainError(msg)
+    who = "you" if order.claimed_by == actor.id else "another driver"
+    msg = f"order #{order.number} is already held by {who}"
+    raise ConflictError(msg)
+
+
+async def claim(
+    session: AsyncSession, order_id: EntityId, actor: identity.Actor
+) -> OrderView:
+    """Take a delivery from the pool.
+
+    The order is taken with one conditional update, so when two drivers
+    tap the same order at once exactly one gets it.
+
+    Returns:
+        The order, now held by the driver.
+
+    Raises:
+        PermissionDeniedError: Not a driver.
+        DomainError: The driver is not on shift.
+    """
+    if not actor.has(identity.Role.DRIVER):
+        msg = "only drivers claim deliveries"
+        raise PermissionDeniedError(msg)
+    if not actor.user.on_shift:
+        msg = "start your shift to claim deliveries"
+        raise DomainError(msg)
+    taken = await session.scalar(
+        update(Order)
+        .where(
+            Order.id == order_id,
+            Order.status == OrderStatus.OPEN,
+            Order.fulfilment == Fulfilment.DELIVERY,
+            Order.claimed_by.is_(None),
+        )
+        .values(claimed_by=actor.id, claimed_at=_now(), pooled_at=None)
+        .returning(Order.id)
+    )
+    if taken is None:
+        await _why_not_claimed(session, order_id, actor)
+    order = await _load(session, order_id)
+    session.add(_event(order, ClaimAction.CLAIMED, actor.id, actor.id))
+    return await _save(session, order)
+
+
+def _back_to_pool(order: Order) -> None:
+    order.claimed_by = None
+    order.claimed_at = None
+    order.pooled_at = _now()
+
+
+async def release(
+    session: AsyncSession, order_id: EntityId, data: Release, actor: identity.Actor
+) -> OrderView:
+    """A driver puts a delivery they hold back in the pool.
+
+    Returns:
+        The order, back in the pool.
+
+    Raises:
+        PermissionDeniedError: The driver does not hold it.
+    """
+    order = await _load_open(session, order_id)
+    if order.claimed_by != actor.id:
+        msg = f"you don't hold order #{order.number}"
+        raise PermissionDeniedError(msg)
+    event = _event(order, ClaimAction.RELEASED, actor.id, actor.id)
+    event.reason = data.reason
+    session.add(event)
+    _back_to_pool(order)
+    return await _save(session, order)
+
+
+async def take_back(
+    session: AsyncSession, order_id: EntityId, data: TakeBack, actor: identity.Actor
+) -> OrderView:
+    """Staff take a delivery away from its driver, back into the pool.
+
+    Returns:
+        The order, back in the pool.
+
+    Raises:
+        PermissionDeniedError: Not staff.
+        DomainError: No driver holds it.
+    """
+    if not _is_staff(actor):
+        msg = "only staff can take deliveries back from drivers"
+        raise PermissionDeniedError(msg)
+    order = await _load_open(session, order_id)
+    if order.claimed_by is None:
+        msg = f"no driver holds order #{order.number}"
+        raise DomainError(msg)
+    event = _event(order, ClaimAction.TAKEN_BACK, order.claimed_by, actor.id)
+    event.reason = data.reason
+    session.add(event)
+    _back_to_pool(order)
+    return await _save(session, order)
+
+
+def _open_deliveries() -> Select[Order]:
+    return (
+        select(Order)
+        .options(selectinload(Order.lines), selectinload(Order.returns))
+        .where(
+            Order.status == OrderStatus.OPEN,
+            Order.fulfilment == Fulfilment.DELIVERY,
+        )
+    )
+
+
+async def pool(session: AsyncSession) -> list[OrderView]:
+    """Deliveries waiting for a driver, longest-waiting first.
+
+    Returns:
+        The orders.
+    """
+    query = (
+        _open_deliveries()
+        .where(Order.claimed_by.is_(None))
+        .order_by(Order.pooled_at, Order.number)
+    )
+    return [_order_view(order) for order in await session.scalars(query)]
+
+
+async def held(session: AsyncSession, driver_id: EntityId) -> list[OrderView]:
+    """Deliveries a driver holds, in the order they were claimed.
+
+    Returns:
+        The orders.
+    """
+    query = (
+        _open_deliveries()
+        .where(Order.claimed_by == driver_id)
+        .order_by(Order.claimed_at, Order.number)
+    )
+    return [_order_view(order) for order in await session.scalars(query)]
+
+
+async def claim_history(
+    session: AsyncSession, order_id: EntityId
+) -> list[ClaimEventView]:
+    """Who has held a delivery, oldest first.
+
+    Returns:
+        The claim events.
+    """
+    _ = await _load(session, order_id)
+    rows = await session.scalars(
+        select(ClaimEvent)
+        .where(ClaimEvent.order_id == order_id)
+        .order_by(ClaimEvent.id)
+    )
+    return [
+        ClaimEventView(
+            id=row.id,
+            order_id=row.order_id,
+            action=row.action,
+            driver_id=row.driver_id,
+            recorded_by=row.recorded_by,
+            reason=row.reason,
+            occurred_at=row.occurred_at,
+        )
+        for row in rows
+    ]
+
+
+async def alerts(session: AsyncSession) -> OrderAlerts:
+    """Deliveries waiting or held too long, per the company settings.
+
+    Returns:
+        The late deliveries, longest-waiting first.
+    """
+    settings = await company.get_settings(session)
+    now = _now()
+    unclaimed = (
+        _open_deliveries()
+        .where(
+            Order.claimed_by.is_(None),
+            Order.pooled_at
+            <= now - timedelta(minutes=settings.unclaimed_alert_minutes),
+        )
+        .order_by(Order.pooled_at, Order.number)
+    )
+    uncompleted = (
+        _open_deliveries()
+        .where(
+            Order.claimed_at
+            <= now - timedelta(minutes=settings.uncompleted_alert_minutes),
+        )
+        .order_by(Order.claimed_at, Order.number)
+    )
+    return OrderAlerts(
+        unclaimed=[_order_view(o) for o in await session.scalars(unclaimed)],
+        uncompleted=[_order_view(o) for o in await session.scalars(uncompleted)],
+    )

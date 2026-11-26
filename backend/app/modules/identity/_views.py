@@ -41,6 +41,8 @@ class UserView(_View):
     name: str
     roles: list[Role]
     active: bool
+    on_shift: bool
+    """Drivers only: working now, so they can claim orders."""
 
 
 class Actor(_View):

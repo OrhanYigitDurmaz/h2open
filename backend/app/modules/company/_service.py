@@ -17,6 +17,8 @@ DEFAULTS = SettingsView(
     walk_in_sales_enabled=True,
     walk_in_deposits_allowed=False,
     negative_stock_allowed=True,
+    unclaimed_alert_minutes=15,
+    uncompleted_alert_minutes=120,
 )
 
 
@@ -28,6 +30,8 @@ def _view(row: Settings | None) -> SettingsView:
         walk_in_sales_enabled=row.walk_in_sales_enabled,
         walk_in_deposits_allowed=row.walk_in_deposits_allowed,
         negative_stock_allowed=row.negative_stock_allowed,
+        unclaimed_alert_minutes=row.unclaimed_alert_minutes,
+        uncompleted_alert_minutes=row.uncompleted_alert_minutes,
     )
 
 
@@ -54,6 +58,8 @@ async def update_settings(session: AsyncSession, data: SettingsUpdate) -> Settin
             walk_in_sales_enabled=DEFAULTS.walk_in_sales_enabled,
             walk_in_deposits_allowed=DEFAULTS.walk_in_deposits_allowed,
             negative_stock_allowed=DEFAULTS.negative_stock_allowed,
+            unclaimed_alert_minutes=DEFAULTS.unclaimed_alert_minutes,
+            uncompleted_alert_minutes=DEFAULTS.uncompleted_alert_minutes,
         )
         session.add(row)
     if data.deposit_refund_policy is not None:
@@ -64,5 +70,9 @@ async def update_settings(session: AsyncSession, data: SettingsUpdate) -> Settin
         row.walk_in_deposits_allowed = data.walk_in_deposits_allowed
     if data.negative_stock_allowed is not None:
         row.negative_stock_allowed = data.negative_stock_allowed
+    if data.unclaimed_alert_minutes is not None:
+        row.unclaimed_alert_minutes = data.unclaimed_alert_minutes
+    if data.uncompleted_alert_minutes is not None:
+        row.uncompleted_alert_minutes = data.uncompleted_alert_minutes
     await session.flush()
     return _view(row)

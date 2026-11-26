@@ -12,9 +12,12 @@ from app.modules.orders import _service
 from app.modules.orders._schemas import LineIn, OrderCompletion
 from app.modules.orders._views import (
     Channel,
+    ClaimAction,
+    ClaimEventView,
     ContainerReturnView,
     DeliveryAddressView,
     Fulfilment,
+    OrderAlerts,
     OrderLineView,
     OrderStatus,
     OrderView,
@@ -28,10 +31,13 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Channel",
+    "ClaimAction",
+    "ClaimEventView",
     "ContainerReturnView",
     "DeliveryAddressView",
     "Fulfilment",
     "LineIn",
+    "OrderAlerts",
     "OrderCompletion",
     "OrderLineView",
     "OrderStatus",

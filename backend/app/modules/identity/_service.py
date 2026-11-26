@@ -15,6 +15,7 @@ from app.core.errors import (
     ConflictError,
     DomainError,
     NotFoundError,
+    PermissionDeniedError,
     UnauthenticatedError,
 )
 from app.core.ids import new_id
@@ -74,6 +75,7 @@ def _user_view(user: User) -> UserView:
         name=user.name,
         roles=sorted((row.role for row in user.roles), key=list(Role).index),
         active=user.active,
+        on_shift=user.on_shift,
     )
 
 
@@ -250,6 +252,36 @@ async def set_push_token(
     )
 
 
+def _set_shift(user: User, *, on_shift: bool) -> None:
+    """Start or end a driver's shift.
+
+    Raises:
+        DomainError: Starting a shift for someone who is not a driver.
+    """
+    if on_shift and Role.DRIVER not in {row.role for row in user.roles}:
+        msg = "only drivers have shifts"
+        raise DomainError(msg)
+    user.on_shift = on_shift
+
+
+async def set_shift(session: AsyncSession, actor: Actor, *, on_shift: bool) -> UserView:
+    """Start or end your own shift.
+
+    Returns:
+        You, with the new shift status.
+
+    Raises:
+        PermissionDeniedError: You are not a driver.
+    """
+    if not actor.has(Role.DRIVER):
+        msg = "only drivers have shifts"
+        raise PermissionDeniedError(msg)
+    user = await _load(session, actor.id)
+    _set_shift(user, on_shift=on_shift)
+    await session.flush()
+    return _user_view(user)
+
+
 async def change_password(
     session: AsyncSession, actor: Actor, data: PasswordChange
 ) -> None:
@@ -388,6 +420,10 @@ async def update_user(
         user.active = data.active
         if not data.active:
             await _revoke_all(session, user_id)
+    if data.on_shift is not None:
+        _set_shift(user, on_shift=data.on_shift)
+    if not user.active or Role.DRIVER not in {row.role for row in user.roles}:
+        user.on_shift = False
     await session.flush()
     await _require_an_admin(session)
     return _user_view(await _load(session, user_id))

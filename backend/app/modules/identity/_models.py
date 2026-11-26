@@ -15,6 +15,7 @@ from sqlalchemy import (
     MetaData,
     SmallInteger,
     String,
+    false,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -41,6 +42,8 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(200))
     password_hash: Mapped[str] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(default=True)
+    on_shift: Mapped[bool] = mapped_column(default=False, server_default=false())
+    """Drivers on shift see the order pool and can claim orders."""
     failed_logins: Mapped[int] = mapped_column(default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

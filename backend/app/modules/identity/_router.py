@@ -18,6 +18,7 @@ from app.modules.identity._schemas import (
     PasswordReset,
     PushTokenUpdate,
     SecuritySettingsUpdate,
+    ShiftUpdate,
     UserCreate,
     UserUpdate,
 )
@@ -79,6 +80,18 @@ async def set_push_token(
 ) -> None:
     """Set or clear this login's Firebase token (for call notifications)."""
     await _service.set_push_token(session, actor, data.fcm_token)
+
+
+@auth.put("/me/shift")
+async def set_shift(
+    session: SessionDep, actor: CurrentActor, data: ShiftUpdate
+) -> UserView:
+    """Drivers start or end their shift; on shift, they can claim orders.
+
+    Returns:
+        You, with the new shift status.
+    """
+    return await _service.set_shift(session, actor, on_shift=data.on_shift)
 
 
 @auth.put("/me/password", status_code=HTTPStatus.NO_CONTENT)

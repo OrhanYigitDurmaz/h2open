@@ -47,6 +47,17 @@ class PaymentMethod(StrEnum):
     BANK_TRANSFER = "bank_transfer"
 
 
+class ClaimAction(StrEnum):
+    """What happened to a delivery's driver."""
+
+    CLAIMED = "claimed"
+    """A driver took it from the pool."""
+    RELEASED = "released"
+    """The driver put it back in the pool."""
+    TAKEN_BACK = "taken_back"
+    """Staff took it away from the driver, back into the pool."""
+
+
 class _View(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
 
@@ -125,3 +136,30 @@ class OrderView(_View):
     cancelled_at: datetime | None
     cancelled_by: EntityId | None
     cancel_reason: str | None
+    claimed_by: EntityId | None
+    """The driver holding (or who held) this delivery."""
+    claimed_at: datetime | None
+    waiting_since: datetime | None
+    """Set while the delivery is in the pool: when it entered it."""
+
+
+class ClaimEventView(_View):
+    """One step in who has held a delivery."""
+
+    id: EntityId
+    order_id: EntityId
+    action: ClaimAction
+    driver_id: EntityId
+    recorded_by: EntityId
+    """The driver themself, or the staff member who took it back."""
+    reason: str | None
+    occurred_at: datetime
+
+
+class OrderAlerts(_View):
+    """Deliveries that need someone's attention."""
+
+    unclaimed: list[OrderView]
+    """In the pool longer than the company's unclaimed alert time."""
+    uncompleted: list[OrderView]
+    """Held by a driver longer than the uncompleted alert time."""

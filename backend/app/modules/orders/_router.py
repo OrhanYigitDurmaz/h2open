@@ -17,8 +17,10 @@ from app.modules.orders._schemas import (
     OrderCreate,
     OrderSearch,
     OrderUpdate,
+    Release,
+    TakeBack,
 )
-from app.modules.orders._views import OrderView
+from app.modules.orders._views import ClaimEventView, OrderAlerts, OrderView
 
 router = APIRouter(
     prefix="/orders",
@@ -49,6 +51,36 @@ async def list_orders(
         The matching orders.
     """
     return await _service.list_orders(session, search)
+
+
+@router.get("/pool")
+async def pool(session: SessionDep) -> list[OrderView]:
+    """Deliveries waiting for a driver, longest-waiting first.
+
+    Returns:
+        The unclaimed open deliveries.
+    """
+    return await _service.pool(session)
+
+
+@router.get("/mine")
+async def mine(session: SessionDep, actor: identity.CurrentActor) -> list[OrderView]:
+    """The deliveries you hold, in the order you claimed them.
+
+    Returns:
+        Your open deliveries.
+    """
+    return await _service.held(session, actor.id)
+
+
+@router.get("/alerts")
+async def alerts(session: SessionDep) -> OrderAlerts:
+    """Deliveries waiting or held too long, for the POS to flag.
+
+    Returns:
+        The late deliveries; thresholds are company settings.
+    """
+    return await _service.alerts(session)
 
 
 @router.get("/{order_id}")
@@ -87,7 +119,7 @@ async def complete_order(
         ``override_required`` means empties of another brand were returned;
         repeat with ``override_reason`` to accept them.
     """
-    return await _service.complete_order(session, order_id, data, actor.id)
+    return await _service.complete_as(session, order_id, data, actor)
 
 
 @router.post("/{order_id}/cancel")
@@ -103,3 +135,55 @@ async def cancel_order(
         The cancelled order.
     """
     return await _service.cancel_order(session, order_id, data, actor.id)
+
+
+@router.post("/{order_id}/claim")
+async def claim(
+    session: SessionDep, actor: identity.CurrentActor, order_id: EntityId
+) -> OrderView:
+    """Take a delivery from the pool. Drivers on shift only.
+
+    Returns:
+        The order, now yours. A 409 means another driver got it first.
+    """
+    return await _service.claim(session, order_id, actor)
+
+
+@router.post("/{order_id}/release")
+async def release(
+    session: SessionDep,
+    actor: identity.CurrentActor,
+    order_id: EntityId,
+    data: Release,
+) -> OrderView:
+    """Put a delivery you hold back in the pool.
+
+    Returns:
+        The order, back in the pool.
+    """
+    return await _service.release(session, order_id, data, actor)
+
+
+@router.post("/{order_id}/take-back")
+async def take_back(
+    session: SessionDep,
+    actor: identity.CurrentActor,
+    order_id: EntityId,
+    data: TakeBack,
+) -> OrderView:
+    """Take a delivery away from its driver, back into the pool. Staff only.
+
+    Returns:
+        The order, back in the pool.
+    """
+    return await _service.take_back(session, order_id, data, actor)
+
+
+@router.get("/{order_id}/claims")
+async def claims(session: SessionDep, order_id: EntityId) -> list[ClaimEventView]:
+    """Who has held a delivery, oldest first.
+
+    Returns:
+        The claim history.
+    """
+    return await _service.claim_history(session, order_id)

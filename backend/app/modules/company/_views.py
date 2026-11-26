@@ -40,3 +40,7 @@ class SettingsView(BaseModel):
     shows that a receipt or a count is missing. When not, a sale or other
     removal that would go below zero is refused.
     """
+    unclaimed_alert_minutes: int
+    """Alert staff when a delivery waits this long without a driver."""
+    uncompleted_alert_minutes: int
+    """Alert staff when a claimed delivery is not completed within this."""

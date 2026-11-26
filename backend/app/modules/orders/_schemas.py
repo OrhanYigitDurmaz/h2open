@@ -123,10 +123,23 @@ class OrderCancel(BaseModel):
     reason: Reason
 
 
+class Release(BaseModel):
+    """A driver putting a delivery back in the pool."""
+
+    reason: Reason | None = None
+
+
+class TakeBack(BaseModel):
+    """Staff taking a delivery away from a driver."""
+
+    reason: Reason
+
+
 class OrderSearch(BaseModel):
     """Query parameters for listing orders."""
 
     status: OrderStatus | None = None
     fulfilment: Fulfilment | None = None
     customer_id: EntityId | None = None
+    claimed_by: EntityId | None = None
     limit: Annotated[int, Field(ge=1, le=200)] = 50
