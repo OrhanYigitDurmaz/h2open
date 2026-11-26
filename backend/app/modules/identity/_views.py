@@ -27,6 +27,8 @@ class Platform(StrEnum):
 
     WEB = "web"
     ANDROID = "android"
+    DESKTOP = "desktop"
+    """The Windows/Linux POS app."""
 
 
 class _View(BaseModel):

@@ -74,6 +74,18 @@ def test_login_and_me(client: TestClient, database: Database) -> None:
     assert not actor.has(Role.ADMIN)
 
 
+def test_desktop_logins_are_marked(client: TestClient, database: Database) -> None:
+    """The POS app logs in as "desktop", shown in the user's logins."""
+    user = make_user(database, "ayse", {Role.STAFF})
+    response = attempt(
+        client, "ayse", CREDENTIAL, platform="desktop", client_name="POS 1"
+    )
+    assert response.status_code == HTTPStatus.OK
+    [session] = SESSIONS.validate_json(client.get(f"/users/{user.id}/sessions").content)
+    assert session.platform == "desktop"
+    assert session.client_name == "POS 1"
+
+
 @pytest.mark.parametrize(
     ("username", "password"), [("ayse", WRONG), ("nobody", CREDENTIAL)]
 )

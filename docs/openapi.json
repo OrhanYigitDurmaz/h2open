@@ -6780,7 +6780,8 @@
         "type": "string",
         "enum": [
           "web",
-          "android"
+          "android",
+          "desktop"
         ],
         "title": "Platform",
         "description": "What a login is from."
