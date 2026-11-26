@@ -1,12 +1,15 @@
 #include "loginwindow.h"
 
+#include "appearance.h"
 #include "dimlabel.h"
 
 #include <QCloseEvent>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 using namespace Qt::StringLiterals;
@@ -70,8 +73,20 @@ LoginWindow::LoginWindow(QWidget *parent)
     layout->addWidget(m_error);
     layout->addWidget(m_submit);
 
+    // The theme can be picked before logging in, at the top right.
+    auto *theme = new QToolButton(this);
+    theme->setObjectName(u"theme"_s);
+    theme->setText(u"Theme"_s);
+    theme->setAutoRaise(true);
+    theme->setPopupMode(QToolButton::InstantPopup);
+    theme->setMenu(createThemeMenu(theme));
+    auto *top = new QHBoxLayout();
+    top->addStretch();
+    top->addWidget(theme);
+
     auto *outer = new QVBoxLayout(this);
-    outer->addWidget(card, 0, Qt::AlignCenter);
+    outer->addLayout(top);
+    outer->addWidget(card, 1, Qt::AlignCenter);
 
     connect(m_username, &QLineEdit::returnPressed, m_password, [this] { m_password->setFocus(); });
     connect(m_password, &QLineEdit::returnPressed, this, &LoginWindow::submit);

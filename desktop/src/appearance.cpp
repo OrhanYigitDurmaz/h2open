@@ -1,9 +1,15 @@
 #include "appearance.h"
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QColor>
+#include <QMenu>
+#include <QSettings>
 #include <QStyle>
 #include <QStyleHints>
+
+#include <array>
+#include <utility>
 
 using namespace Qt::StringLiterals;
 
@@ -11,27 +17,33 @@ namespace h2open {
 
 namespace {
 
-/// The choice made with setColorScheme(); `Unknown` follows the system.
-Qt::ColorScheme &chosenScheme()
-{
-    static Qt::ColorScheme scheme = Qt::ColorScheme::Dark;
-    return scheme;
-}
+/// Where the choice is saved, in QSettings.
+constexpr auto settingsKey = u"appearance/colorScheme";
+
+struct SchemeChoice {
+    Qt::ColorScheme scheme = Qt::ColorScheme::Dark;
+    QStringView name;
+    QStringView label;
+};
+
+/// The choices, in menu order.
+constexpr std::array<SchemeChoice, 3> choices{
+    SchemeChoice{.scheme = Qt::ColorScheme::Dark, .name = u"dark", .label = u"&Dark"},
+    SchemeChoice{.scheme = Qt::ColorScheme::Light, .name = u"light", .label = u"&Light"},
+    SchemeChoice{
+        .scheme = Qt::ColorScheme::Unknown,
+        .name = u"system",
+        .label = u"Follow the &system",
+    },
+};
 
 /// Dark or light, after resolving "follow the system".
-bool wantsDark()
+bool wantsDark(Qt::ColorScheme scheme)
 {
-    const Qt::ColorScheme chosen = chosenScheme();
-    if (chosen == Qt::ColorScheme::Unknown) {
+    if (scheme == Qt::ColorScheme::Unknown) {
         return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
     }
-    return chosen == Qt::ColorScheme::Dark;
-}
-
-void applyPalette()
-{
-    QApplication::setPalette(wantsDark() ? darkPalette()
-                                         : QApplication::style()->standardPalette());
+    return scheme == Qt::ColorScheme::Dark;
 }
 
 } // namespace
@@ -83,35 +95,91 @@ QPalette darkPalette()
     return palette;
 }
 
-void setUpAppearance()
+QString schemeName(Qt::ColorScheme scheme)
 {
-    QApplication::setStyle(u"Fusion"_s);
-    // When the system switches between light and dark, follow it if asked to.
-    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, qApp, [] {
-        if (chosenScheme() == Qt::ColorScheme::Unknown) {
-            applyPalette();
+    for (const SchemeChoice &choice : choices) {
+        if (choice.scheme == scheme) {
+            return choice.name.toString();
         }
-    });
-    setColorScheme(chosenScheme());
+    }
+    return u"dark"_s;
 }
 
-void setColorScheme(Qt::ColorScheme scheme)
+std::optional<Qt::ColorScheme> schemeFromName(QStringView name)
 {
-    chosenScheme() = scheme;
+    for (const SchemeChoice &choice : choices) {
+        if (choice.name == name) {
+            return choice.scheme;
+        }
+    }
+    return std::nullopt;
+}
+
+Appearance::Appearance(QObject *parent) : QObject(parent)
+{
+    // When the system switches between light and dark, follow it if asked to.
+    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
+        if (m_scheme == Qt::ColorScheme::Unknown) {
+            reapply();
+        }
+    });
+}
+
+Appearance &Appearance::instance()
+{
+    // Owned by the application, so it goes when the application does.
+    static auto *const appearance = new Appearance(QCoreApplication::instance());
+    return *appearance;
+}
+
+void Appearance::setUp()
+{
+    QApplication::setStyle(u"Fusion"_s);
+    const QString saved = QSettings().value(settingsKey).toString();
+    instance().setColorScheme(schemeFromName(saved).value_or(Qt::ColorScheme::Dark));
+}
+
+void Appearance::setColorScheme(Qt::ColorScheme scheme)
+{
+    m_scheme = scheme;
     // Title bars and other system-drawn parts; `Unknown` gives it back to the
     // system.
     QGuiApplication::styleHints()->setColorScheme(scheme);
-    applyPalette();
+    reapply();
+    QSettings().setValue(settingsKey, schemeName(scheme));
+    emit colorSchemeChanged(scheme);
 }
 
-Qt::ColorScheme colorScheme()
+void Appearance::reapply() const
 {
-    return chosenScheme();
+    QApplication::setPalette(wantsDark(m_scheme) ? darkPalette()
+                                                 : QApplication::style()->standardPalette());
 }
 
-void reapplyColorScheme()
+QMenu *createThemeMenu(QWidget *parent)
 {
-    applyPalette();
+    auto *menu = new QMenu(u"&Theme"_s, parent);
+    auto *group = new QActionGroup(menu);
+    const Appearance &appearance = Appearance::instance();
+    for (const SchemeChoice &choice : choices) {
+        QAction *action = menu->addAction(choice.label.toString());
+        action->setCheckable(true);
+        action->setData(QVariant::fromValue(choice.scheme));
+        action->setChecked(choice.scheme == appearance.colorScheme());
+        group->addAction(action);
+        QObject::connect(action, &QAction::triggered, menu, [scheme = choice.scheme] {
+            Appearance::instance().setColorScheme(scheme);
+        });
+    }
+    // Changed from another menu (the login window's, or the main window's).
+    QObject::connect(&appearance, &Appearance::colorSchemeChanged, menu,
+                     [group](Qt::ColorScheme scheme) {
+                         const QList<QAction *> actions = group->actions();
+                         for (QAction *action : actions) {
+                             action->setChecked(action->data().value<Qt::ColorScheme>() == scheme);
+                         }
+                     });
+    return menu;
 }
 
 } // namespace h2open

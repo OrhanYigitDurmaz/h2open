@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include "appearance.h"
 #include "gallery.h"
 
 #include <QApplication>
@@ -28,6 +29,7 @@ MainWindow::MainWindow(const User &user, QWidget *parent) : QMainWindow(parent)
     fileMenu->addAction(logout);
     fileMenu->addSeparator();
     fileMenu->addAction(u"&Quit"_s, QKeySequence::Quit, this, &QWidget::close);
+    menuBar()->addMenu(u"&View"_s)->addMenu(createThemeMenu(this));
     menuBar()->addMenu(u"&Help"_s)->addAction(u"About &Qt"_s, qApp, &QApplication::aboutQt);
 
     auto *toolbar = addToolBar(u"Account"_s);

@@ -7,10 +7,16 @@
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPushButton>
+#include <QSettings>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QStyle>
 #include <QTest>
+#include <QToolButton>
+
+#include <memory>
 
 using namespace Qt::StringLiterals;
 
@@ -33,6 +39,15 @@ public:
     explicit TestWindows(QObject *parent = nullptr) : QObject(parent) {}
 
 private slots:
+    static void initTestCase()
+    {
+        // Settings go to a scratch place, not the user's own, and in the INI
+        // format the app uses (main.cpp).
+        QStandardPaths::setTestModeEnabled(true);
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings().clear();
+    }
+
     static void theLoginWindowIsFixedAt800By600()
     {
         const h2open::LoginWindow window;
@@ -100,16 +115,62 @@ private slots:
         QCOMPARE(palette.color(QPalette::Inactive, QPalette::Highlight), QColor(u"#393d41"_s));
     }
 
-    static void theSchemeCanBeSwitched()
+    static void schemesAreSavedByName()
     {
-        h2open::setUpAppearance();
+        for (const auto scheme :
+             {Qt::ColorScheme::Dark, Qt::ColorScheme::Light, Qt::ColorScheme::Unknown}) {
+            QCOMPARE(h2open::schemeFromName(h2open::schemeName(scheme)), scheme);
+        }
+        QCOMPARE(h2open::schemeName(Qt::ColorScheme::Unknown), u"system"_s);
+        QCOMPARE(h2open::schemeFromName(u"purple"), std::nullopt);
+    }
+
+    static void theSavedSchemeIsUsedAtStart()
+    {
+        QSettings().setValue(u"appearance/colorScheme"_s, u"light"_s);
+        h2open::Appearance::setUp();
         QCOMPARE(QApplication::style()->name().toLower(), u"fusion"_s);
-        QCOMPARE(QApplication::palette().color(QPalette::Window), QColor(25, 25, 25));
-        h2open::setColorScheme(Qt::ColorScheme::Light);
+        QCOMPARE(h2open::Appearance::instance().colorScheme(), Qt::ColorScheme::Light);
         QCOMPARE(QApplication::palette(), QApplication::style()->standardPalette());
-        h2open::setColorScheme(Qt::ColorScheme::Dark);
-        QCOMPARE(h2open::colorScheme(), Qt::ColorScheme::Dark);
+    }
+
+    static void aBrokenSettingFallsBackToDark()
+    {
+        QSettings().setValue(u"appearance/colorScheme"_s, u"purple"_s);
+        h2open::Appearance::setUp();
+        QCOMPARE(h2open::Appearance::instance().colorScheme(), Qt::ColorScheme::Dark);
         QCOMPARE(QApplication::palette().color(QPalette::Window), QColor(25, 25, 25));
+    }
+
+    static void theThemeMenuChangesAndFollowsTheScheme()
+    {
+        h2open::Appearance &appearance = h2open::Appearance::instance();
+        appearance.setColorScheme(Qt::ColorScheme::Dark);
+        const std::unique_ptr<QMenu> menu{h2open::createThemeMenu(nullptr)};
+        const QList<QAction *> actions = menu->actions();
+        QCOMPARE(actions.size(), 3);
+        QVERIFY(actions.at(0)->isChecked());
+
+        // Picking "Light" in the menu switches, and is saved.
+        actions.at(1)->trigger();
+        QCOMPARE(appearance.colorScheme(), Qt::ColorScheme::Light);
+        const QSettings settings;
+        QCOMPARE(settings.value(u"appearance/colorScheme"_s).toString(), u"light"_s);
+        QCOMPARE(settings.format(), QSettings::IniFormat);
+        QVERIFY(settings.fileName().endsWith(u".ini"));
+
+        // A change made elsewhere (another window's menu) shows here too.
+        appearance.setColorScheme(Qt::ColorScheme::Unknown);
+        QVERIFY(actions.at(2)->isChecked());
+        QVERIFY(!actions.at(1)->isChecked());
+        appearance.setColorScheme(Qt::ColorScheme::Dark);
+    }
+
+    static void theLoginWindowHasAThemeMenu()
+    {
+        const h2open::LoginWindow window;
+        const auto *button = window.findChild<QToolButton *>(u"theme"_s);
+        QVERIFY(button != nullptr && button->menu() != nullptr);
     }
 
     static void theMainWindowOpensWithTheGallery()

@@ -155,16 +155,8 @@ QWidget *Gallery::header()
     connect(style, &QComboBox::currentTextChanged, this, [](const QString &name) {
         QApplication::setStyle(name);
         // A new style resets the palette.
-        reapplyColorScheme();
+        Appearance::instance().reapply();
     });
-
-    auto *scheme = new QComboBox(header);
-    scheme->addItem(u"Dark"_s, QVariant::fromValue(Qt::ColorScheme::Dark));
-    scheme->addItem(u"Light"_s, QVariant::fromValue(Qt::ColorScheme::Light));
-    scheme->addItem(u"System"_s, QVariant::fromValue(Qt::ColorScheme::Unknown));
-    scheme->setCurrentIndex(scheme->findData(QVariant::fromValue(colorScheme())));
-    connect(scheme, &QComboBox::currentIndexChanged, this,
-            [scheme](int) { setColorScheme(scheme->currentData().value<Qt::ColorScheme>()); });
 
     auto *enabled = new QCheckBox(u"Widgets enabled"_s, header);
     enabled->setChecked(true);
@@ -180,8 +172,6 @@ QWidget *Gallery::header()
     layout->addStretch();
     layout->addWidget(new QLabel(u"Style"_s, header));
     layout->addWidget(style);
-    layout->addWidget(new QLabel(u"Colours"_s, header));
-    layout->addWidget(scheme);
     layout->addWidget(enabled);
     return header;
 }
