@@ -90,6 +90,7 @@ h2open_target(h2open_api)
 
 # The windows, apart from main() so tests can create them.
 add_library(h2open_ui STATIC
+    src/appearance.cpp src/appearance.h
     src/desktopapp.cpp src/desktopapp.h
     src/dimlabel.cpp src/dimlabel.h
     src/gallery.cpp src/gallery.h

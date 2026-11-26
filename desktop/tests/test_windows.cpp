@@ -1,12 +1,15 @@
 // Tests for the windows, run without a display (QT_QPA_PLATFORM=offscreen).
 #include "api.h"
+#include "appearance.h"
 #include "loginwindow.h"
 #include "mainwindow.h"
 
+#include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QStyle>
 #include <QTest>
 
 using namespace Qt::StringLiterals;
@@ -82,6 +85,31 @@ private slots:
         QVERIFY(password->text().isEmpty());
         QVERIFY(password->isEnabled());
         QVERIFY(part<QLabel>(window, u"error"_s)->text().startsWith(u"Wrong username"));
+    }
+
+    static void theDarkPaletteHasTheDesignedColours()
+    {
+        const QPalette palette = h2open::darkPalette();
+        QCOMPARE(palette.color(QPalette::Active, QPalette::Window), QColor(25, 25, 25));
+        QCOMPARE(palette.color(QPalette::Active, QPalette::ButtonText), QColor(u"#8ab4f7"_s));
+        QCOMPARE(palette.color(QPalette::Active, QPalette::Highlight), QColor(u"#8ab4f7"_s));
+        // Colours set without a group apply to every group...
+        QCOMPARE(palette.color(QPalette::Disabled, QPalette::Window), QColor(25, 25, 25));
+        // ...unless a group sets its own.
+        QCOMPARE(palette.color(QPalette::Disabled, QPalette::Text), QColor(u"#697177"_s));
+        QCOMPARE(palette.color(QPalette::Inactive, QPalette::Highlight), QColor(u"#393d41"_s));
+    }
+
+    static void theSchemeCanBeSwitched()
+    {
+        h2open::setUpAppearance();
+        QCOMPARE(QApplication::style()->name().toLower(), u"fusion"_s);
+        QCOMPARE(QApplication::palette().color(QPalette::Window), QColor(25, 25, 25));
+        h2open::setColorScheme(Qt::ColorScheme::Light);
+        QCOMPARE(QApplication::palette(), QApplication::style()->standardPalette());
+        h2open::setColorScheme(Qt::ColorScheme::Dark);
+        QCOMPARE(h2open::colorScheme(), Qt::ColorScheme::Dark);
+        QCOMPARE(QApplication::palette().color(QPalette::Window), QColor(25, 25, 25));
     }
 
     static void theMainWindowOpensWithTheGallery()

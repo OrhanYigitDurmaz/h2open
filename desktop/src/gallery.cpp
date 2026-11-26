@@ -1,5 +1,6 @@
 #include "gallery.h"
 
+#include "appearance.h"
 #include "dimlabel.h"
 
 #include <QApplication>
@@ -149,18 +150,21 @@ QWidget *Gallery::header()
 
     auto *style = new QComboBox(header);
     style->addItems(QStyleFactory::keys());
-    style->setCurrentText(QApplication::style()->name());
-    connect(style, &QComboBox::currentTextChanged, this,
-            [](const QString &name) { QApplication::setStyle(name); });
+    // The style reports its name in lower case ("fusion"); the list says "Fusion".
+    style->setCurrentIndex(style->findText(QApplication::style()->name(), Qt::MatchFixedString));
+    connect(style, &QComboBox::currentTextChanged, this, [](const QString &name) {
+        QApplication::setStyle(name);
+        // A new style resets the palette.
+        reapplyColorScheme();
+    });
 
     auto *scheme = new QComboBox(header);
-    scheme->addItem(u"System"_s, QVariant::fromValue(Qt::ColorScheme::Unknown));
-    scheme->addItem(u"Light"_s, QVariant::fromValue(Qt::ColorScheme::Light));
     scheme->addItem(u"Dark"_s, QVariant::fromValue(Qt::ColorScheme::Dark));
-    connect(scheme, &QComboBox::currentIndexChanged, this, [scheme](int) {
-        QGuiApplication::styleHints()->setColorScheme(
-            scheme->currentData().value<Qt::ColorScheme>());
-    });
+    scheme->addItem(u"Light"_s, QVariant::fromValue(Qt::ColorScheme::Light));
+    scheme->addItem(u"System"_s, QVariant::fromValue(Qt::ColorScheme::Unknown));
+    scheme->setCurrentIndex(scheme->findData(QVariant::fromValue(colorScheme())));
+    connect(scheme, &QComboBox::currentIndexChanged, this,
+            [scheme](int) { setColorScheme(scheme->currentData().value<Qt::ColorScheme>()); });
 
     auto *enabled = new QCheckBox(u"Widgets enabled"_s, header);
     enabled->setChecked(true);
