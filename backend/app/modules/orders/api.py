@@ -9,6 +9,15 @@ Deliveries will read orders through here and complete them via
 from typing import TYPE_CHECKING
 
 from app.modules.orders import _service
+from app.modules.orders._events import (
+    DeliveryClaimed,
+    DeliveryReturnedToPool,
+    OrderCancelled,
+    OrderChanged,
+    OrderCompleted,
+    OrderEvent,
+    OrderPlaced,
+)
 from app.modules.orders._schemas import LineIn, OrderCompletion
 from app.modules.orders._views import (
     Channel,
@@ -35,11 +44,18 @@ __all__ = [
     "ClaimEventView",
     "ContainerReturnView",
     "DeliveryAddressView",
+    "DeliveryClaimed",
+    "DeliveryReturnedToPool",
     "Fulfilment",
     "LineIn",
     "OrderAlerts",
+    "OrderCancelled",
+    "OrderChanged",
+    "OrderCompleted",
     "OrderCompletion",
+    "OrderEvent",
     "OrderLineView",
+    "OrderPlaced",
     "OrderStatus",
     "OrderView",
     "PaymentMethod",

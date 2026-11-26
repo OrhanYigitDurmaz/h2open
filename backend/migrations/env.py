@@ -18,6 +18,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.core import outbox
 from app.core.settings import load_settings
 from app.main import MODULES
 
@@ -25,7 +26,8 @@ if TYPE_CHECKING:
     from sqlalchemy import Connection, MetaData
 
 TARGET_METADATA: list[MetaData] = [
-    module.metadata for module in MODULES if module.metadata is not None
+    outbox.METADATA,
+    *(module.metadata for module in MODULES if module.metadata is not None),
 ]
 MODULE_SCHEMAS = {metadata.schema for metadata in TARGET_METADATA}
 

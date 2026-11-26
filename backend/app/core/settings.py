@@ -7,11 +7,15 @@ Business settings that staff change at runtime, such as the deposit refund
 policy, live in the database instead.
 """
 
+from pathlib import Path
 from typing import ClassVar
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+"""Relative file paths in settings are relative to the repository root."""
 
 
 class Settings(BaseSettings):
@@ -32,6 +36,30 @@ class Settings(BaseSettings):
     postgres_db: str = "h2open"
     postgres_user: str = "h2open"
     postgres_password: SecretStr
+    fcm_credentials_file: Path | None = None
+    """The Firebase service account JSON for sending push messages.
+
+    Keep it in ``secrets/`` (gitignored) and readable only by the backend.
+    Without it, push messages are skipped and logged.
+    """
+
+    @field_validator("fcm_credentials_file", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @property
+    def fcm_credentials_path(self) -> Path | None:
+        """Where the Firebase credentials are, resolved against the repo root.
+
+        Returns:
+            An absolute path, or ``None`` if not configured.
+        """
+        if self.fcm_credentials_file is None:
+            return None
+        return REPO_ROOT / self.fcm_credentials_file
 
     @property
     def database_url(self) -> URL:

@@ -7,7 +7,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select, update
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -336,22 +336,18 @@ async def sessions(session: AsyncSession, user_id: EntityId) -> list[SessionView
     ]
 
 
-async def push_targets(session: AsyncSession, role: Role) -> list[PushTarget]:
-    """Phones of active users with a role that are logged in with a push token.
-
-    Returns:
-        One target per live login with a push token.
-    """
+async def _push_targets(
+    session: AsyncSession, *conditions: ColumnElement[bool]
+) -> list[PushTarget]:
     rows = await session.execute(
         select(Session.user_id, Session.id, Session.fcm_token)
         .join(User, User.id == Session.user_id)
-        .join(UserRole, UserRole.user_id == User.id)
         .where(
-            UserRole.role == role,
             User.active,
             Session.revoked_at.is_(None),
             Session.expires_at > _now(),
             Session.fcm_token.is_not(None),
+            *conditions,
         )
         .order_by(Session.created_at)
     )
@@ -360,6 +356,43 @@ async def push_targets(session: AsyncSession, role: Role) -> list[PushTarget]:
         for user_id, session_id, fcm_token in rows
         if fcm_token is not None
     ]
+
+
+async def push_targets(
+    session: AsyncSession, role: Role, *, on_shift_only: bool = False
+) -> list[PushTarget]:
+    """Phones of active users with a role that are logged in with a push token.
+
+    Returns:
+        One target per live login with a push token.
+    """
+    has_role = (
+        select(UserRole.user_id)
+        .where(UserRole.user_id == User.id, UserRole.role == role)
+        .exists()
+    )
+    conditions: list[ColumnElement[bool]] = [has_role]
+    if on_shift_only:
+        conditions.append(User.on_shift.is_(True))
+    return await _push_targets(session, *conditions)
+
+
+async def user_push_targets(
+    session: AsyncSession, user_id: EntityId
+) -> list[PushTarget]:
+    """One active user's logged-in phones with a push token.
+
+    Returns:
+        One target per live login with a push token.
+    """
+    return await _push_targets(session, User.id == user_id)
+
+
+async def forget_push_token(session: AsyncSession, fcm_token: str) -> None:
+    """Stop using a push token Firebase says is no longer valid."""
+    _ = await session.execute(
+        update(Session).where(Session.fcm_token == fcm_token).values(fcm_token=None)
+    )
 
 
 # User administration

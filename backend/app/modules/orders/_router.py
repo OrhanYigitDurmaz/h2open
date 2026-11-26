@@ -95,14 +95,17 @@ async def get_order(session: SessionDep, order_id: EntityId) -> OrderView:
 
 @router.patch("/{order_id}")
 async def update_order(
-    session: SessionDep, order_id: EntityId, data: OrderUpdate
+    session: SessionDep,
+    actor: identity.CurrentActor,
+    order_id: EntityId,
+    data: OrderUpdate,
 ) -> OrderView:
     """Change an open order.
 
     Returns:
         The updated order.
     """
-    return await _service.update_order(session, order_id, data)
+    return await _service.update_order(session, order_id, data, actor.id)
 
 
 @router.post("/{order_id}/complete")

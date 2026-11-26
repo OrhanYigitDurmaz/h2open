@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Assemble the FastAPI application from modules."""
 
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -9,6 +11,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, FastAPI
 
 from app.core.errors import DomainError, domain_error_handler
+from app.core.outbox import Dispatcher, run_forever
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Sequence
@@ -60,7 +63,11 @@ class DuplicateModuleError(ValueError):
 
 
 def create_app(
-    modules: Sequence[Module], *, event_bus: EventBus, database: Database
+    modules: Sequence[Module],
+    *,
+    event_bus: EventBus,
+    database: Database,
+    dispatch_events: bool = True,
 ) -> FastAPI:
     """Build the application and wire every module into it.
 
@@ -68,6 +75,8 @@ def create_app(
         modules: The modules to include.
         event_bus: The bus that module handlers subscribe to.
         database: The database; its connections are closed on shutdown.
+        dispatch_events: Run the outbox dispatcher in the background while
+            the app runs. Tests turn it off and dispatch by hand.
 
     Returns:
         The configured application.
@@ -78,9 +87,18 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[AppState]:
+        dispatcher: asyncio.Task[None] | None = None
+        if dispatch_events:
+            dispatcher = asyncio.create_task(
+                run_forever(Dispatcher(database, event_bus))
+            )
         try:
             yield {"database": database}
         finally:
+            if dispatcher is not None:
+                _ = dispatcher.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await dispatcher
             await database.dispose()
 
     app = FastAPI(title="h2open", lifespan=lifespan)

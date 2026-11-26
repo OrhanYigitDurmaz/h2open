@@ -33,6 +33,8 @@ from app.modules.identity._views import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from app.core.ids import EntityId
+
 __all__ = [
     "Actor",
     "AdminActor",
@@ -47,7 +49,9 @@ __all__ = [
     "admin_actor",
     "create_user",
     "current_actor",
+    "forget_push_token",
     "push_targets",
+    "user_push_targets",
 ]
 
 
@@ -64,14 +68,42 @@ async def create_user(session: AsyncSession, data: UserCreate) -> UserView:
     return await _service.create_user(session, data)
 
 
-async def push_targets(session: AsyncSession, role: Role) -> list[PushTarget]:
+async def push_targets(
+    session: AsyncSession, role: Role, *, on_shift_only: bool = False
+) -> list[PushTarget]:
     """Logged-in phones of active users with a role, for push messages.
 
     Args:
         session: The caller's database session.
         role: Usually ``Role.DRIVER``, for incoming-call notifications.
+        on_shift_only: Only users who are on shift right now.
 
     Returns:
         One target per live login with a push token.
     """
-    return await _service.push_targets(session, role)
+    return await _service.push_targets(session, role, on_shift_only=on_shift_only)
+
+
+async def user_push_targets(
+    session: AsyncSession, user_id: EntityId
+) -> list[PushTarget]:
+    """One active user's logged-in phones, for push messages meant for them.
+
+    Args:
+        session: The caller's database session.
+        user_id: The user.
+
+    Returns:
+        One target per live login with a push token.
+    """
+    return await _service.user_push_targets(session, user_id)
+
+
+async def forget_push_token(session: AsyncSession, fcm_token: str) -> None:
+    """Stop sending to a token Firebase reports as unregistered.
+
+    Args:
+        session: The caller's database session.
+        fcm_token: The dead token.
+    """
+    await _service.forget_push_token(session, fcm_token)

@@ -41,6 +41,8 @@ def pytest_configure() -> None:
     _PATCHES.setattr(
         "app.modules.identity._passwords.COST", SimpleNamespace(n=2**4, r=1, p=1)
     )
+    # Tests never send real push messages, whatever .env says.
+    os.environ["FCM_CREDENTIALS_FILE"] = ""
     database = load_settings().postgres_db
     if not database.endswith("_test"):
         os.environ["POSTGRES_DB"] = f"{database}_test"

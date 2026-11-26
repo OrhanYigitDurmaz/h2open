@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, NoReturn
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 
+from app.core import outbox
 from app.core.errors import (
     ConflictError,
     DomainError,
@@ -24,6 +25,15 @@ from app.modules.containers import api as containers
 from app.modules.customers import api as customers
 from app.modules.identity import api as identity
 from app.modules.inventory import api as inventory
+from app.modules.orders._events import (
+    DeliveryClaimed,
+    DeliveryReturnedToPool,
+    OrderCancelled,
+    OrderChanged,
+    OrderCompleted,
+    OrderEvent,
+    OrderPlaced,
+)
 from app.modules.orders._models import ClaimEvent, Order, OrderLine, OrderReturn
 from app.modules.orders._views import (
     ClaimAction,
@@ -208,6 +218,29 @@ async def _save(session: AsyncSession, order: Order) -> OrderView:
     return _order_view(await _load(session, order.id))
 
 
+async def _announce(
+    session: AsyncSession,
+    order: Order,
+    event_class: type[OrderEvent],
+    actor_id: EntityId,
+) -> OrderView:
+    """Write the order and announce what happened to it, via the outbox.
+
+    Returns:
+        The order as stored.
+    """
+    await session.flush()
+    event = event_class(
+        order_id=order.id,
+        number=order.number,
+        fulfilment=order.fulfilment,
+        claimed_by=order.claimed_by,
+        actor_id=actor_id,
+    )
+    await outbox.publish(session, event)
+    return _order_view(await _load(session, order.id))
+
+
 # Rules shared by create, update and complete
 
 
@@ -378,7 +411,7 @@ async def create_order(
     await _set_lines(session, order, data.lines)
     _set_expected_returns(order, data.expected_returns)
     session.add(order)
-    return await _save(session, order)
+    return await _announce(session, order, OrderPlaced, actor_id)
 
 
 async def get_order(session: AsyncSession, order_id: EntityId) -> OrderView:
@@ -414,7 +447,7 @@ async def list_orders(session: AsyncSession, search: OrderSearch) -> list[OrderV
 
 
 async def update_order(
-    session: AsyncSession, order_id: EntityId, data: OrderUpdate
+    session: AsyncSession, order_id: EntityId, data: OrderUpdate, actor_id: EntityId
 ) -> OrderView:
     """Change an open order.
 
@@ -441,7 +474,7 @@ async def update_order(
         )
     if "notes" in data.model_fields_set:
         order.notes = data.notes
-    return await _save(session, order)
+    return await _announce(session, order, OrderChanged, actor_id)
 
 
 async def cancel_order(
@@ -458,7 +491,7 @@ async def cancel_order(
     order.cancelled_at = _now()
     order.cancel_reason = data.reason
     order.cancelled_by = actor_id
-    return await _save(session, order)
+    return await _announce(session, order, OrderCancelled, actor_id)
 
 
 # Completion
@@ -602,7 +635,7 @@ async def complete_order(
     order.pooled_at = None
     order.status = OrderStatus.COMPLETED
     order.completed_at = _now()
-    return await _save(session, order)
+    return await _announce(session, order, OrderCompleted, actor_id)
 
 
 def _is_staff(actor: identity.Actor) -> bool:
@@ -703,13 +736,36 @@ async def claim(
         await _why_not_claimed(session, order_id, actor)
     order = await _load(session, order_id)
     session.add(_event(order, ClaimAction.CLAIMED, actor.id, actor.id))
-    return await _save(session, order)
+    return await _announce(session, order, DeliveryClaimed, actor.id)
 
 
-def _back_to_pool(order: Order) -> None:
+async def _return_to_pool(
+    session: AsyncSession, order: Order, event: ClaimEvent
+) -> OrderView:
+    """Put a held delivery back in the pool and announce it.
+
+    Returns:
+        The order, back in the pool.
+    """
+    session.add(event)
     order.claimed_by = None
     order.claimed_at = None
     order.pooled_at = _now()
+    await session.flush()
+    await outbox.publish(
+        session,
+        DeliveryReturnedToPool(
+            order_id=order.id,
+            number=order.number,
+            fulfilment=order.fulfilment,
+            claimed_by=None,
+            actor_id=event.recorded_by,
+            previous_driver=event.driver_id,
+            taken_back=event.action is ClaimAction.TAKEN_BACK,
+            reason=event.reason,
+        ),
+    )
+    return await _save(session, order)
 
 
 async def release(
@@ -729,9 +785,7 @@ async def release(
         raise PermissionDeniedError(msg)
     event = _event(order, ClaimAction.RELEASED, actor.id, actor.id)
     event.reason = data.reason
-    session.add(event)
-    _back_to_pool(order)
-    return await _save(session, order)
+    return await _return_to_pool(session, order, event)
 
 
 async def take_back(
@@ -755,9 +809,7 @@ async def take_back(
         raise DomainError(msg)
     event = _event(order, ClaimAction.TAKEN_BACK, order.claimed_by, actor.id)
     event.reason = data.reason
-    session.add(event)
-    _back_to_pool(order)
-    return await _save(session, order)
+    return await _return_to_pool(session, order, event)
 
 
 def _open_deliveries() -> Select[Order]:
