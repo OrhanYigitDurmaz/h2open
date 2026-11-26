@@ -19,6 +19,7 @@ from app.core.errors import (
 )
 from app.core.ids import new_id
 from app.core.money import Money
+from app.modules.accounts import api as accounts
 from app.modules.catalog import api as catalog
 from app.modules.company import api as company
 from app.modules.containers import api as containers
@@ -602,6 +603,24 @@ async def _take_from_stock(
     )
 
 
+async def _charge_account(
+    session: AsyncSession, order: Order, data: OrderCompletion, actor_id: EntityId
+) -> None:
+    """Put an on-account order's total on the customer's account."""
+    if (
+        order.payment_method is not PaymentMethod.ON_ACCOUNT
+        or order.customer_id is None
+    ):
+        return
+    charge = accounts.OrderCharge(
+        customer_id=order.customer_id,
+        order_id=order.id,
+        total=_order_view(order).total,
+        override_reason=data.credit_override_reason,
+    )
+    _ = await accounts.charge(session, charge, actor_id)
+
+
 async def complete_order(
     session: AsyncSession, order_id: EntityId, data: OrderCompletion, actor_id: EntityId
 ) -> OrderView:
@@ -631,6 +650,7 @@ async def complete_order(
     order.override_reason = data.override_reason
     await _exchange_containers(session, order, returned, actor_id)
     await _take_from_stock(session, order, actor_id)
+    await _charge_account(session, order, data, actor_id)
     order.completed_by = actor_id
     order.pooled_at = None
     order.status = OrderStatus.COMPLETED

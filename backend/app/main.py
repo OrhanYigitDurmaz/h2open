@@ -6,6 +6,7 @@ from app.core.app import Module, create_app
 from app.core.db import Database
 from app.core.events import EventBus
 from app.core.settings import load_settings
+from app.modules.accounts.module import MODULE as ACCOUNTS
 from app.modules.catalog.module import MODULE as CATALOG
 from app.modules.company.module import MODULE as COMPANY
 from app.modules.containers.module import MODULE as CONTAINERS
@@ -24,6 +25,7 @@ MODULES: tuple[Module, ...] = (
     CUSTOMERS,
     INVENTORY,
     CONTAINERS,
+    ACCOUNTS,
     ORDERS,
     PURCHASING,
     TELEPHONY,

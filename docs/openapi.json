@@ -2128,7 +2128,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AdjustmentCreate"
+                "$ref": "#/components/schemas/app__modules__inventory___schemas__AdjustmentCreate"
               }
             }
           },
@@ -2350,6 +2350,381 @@
                     "$ref": "#/components/schemas/app__modules__containers___views__MovementView"
                   },
                   "title": "Response Movements Containers Customers  Customer Id  Movements Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/debtors": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Debtors",
+        "description": "Customers who owe something, most first: the collecting list.\n\nReturns:\n    The debtors.",
+        "operationId": "debtors_accounts_debtors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DebtorView"
+                  },
+                  "type": "array",
+                  "title": "Response Debtors Accounts Debtors Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/accounts/customers/{customer_id}": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Account",
+        "description": "What a customer owes, and how much more they may buy on account.\n\nReturns:\n    The account.",
+        "operationId": "account_accounts_customers__customer_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/customers/{customer_id}/statement": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Statement",
+        "description": "A customer's account over a period, with a running balance.\n\nReturns:\n    The statement.",
+        "operationId": "statement_accounts_customers__customer_id__statement_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/customers/{customer_id}/credit-limit": {
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Credit Limit",
+        "description": "Set (or with ``null``, remove) a customer's credit limit. Admins only.\n\nReturns:\n    The account.",
+        "operationId": "set_credit_limit_accounts_customers__customer_id__credit_limit_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditLimitUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/accounts/payments": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Record Payment",
+        "description": "Record a customer paying off debt, at the shop or at the door.\n\nReturns:\n    The ledger line; it records who took the money.",
+        "operationId": "record_payment_accounts_payments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__accounts___schemas__PaymentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/accounts/adjustments": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Adjust",
+        "description": "Correct a balance, e.g. an old debt from before h2open. Admins only.\n\nReturns:\n    The ledger line.",
+        "operationId": "adjust_accounts_adjustments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__accounts___schemas__AdjustmentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/accounts/entries/{entry_id}/void": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Void",
+        "description": "Void a payment or adjustment entered by mistake. Admins only.\n\nReturns:\n    The voided line.",
+        "operationId": "void_accounts_entries__entry_id__void_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__accounts___schemas__Void"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
                 }
               }
             }
@@ -3500,7 +3875,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Void"
+                "$ref": "#/components/schemas/app__modules__purchasing___schemas__Void"
               }
             }
           }
@@ -3547,7 +3922,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PaymentCreate"
+                "$ref": "#/components/schemas/app__modules__purchasing___schemas__PaymentCreate"
               }
             }
           }
@@ -3701,7 +4076,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Void"
+                "$ref": "#/components/schemas/app__modules__purchasing___schemas__Void"
               }
             }
           }
@@ -4010,6 +4385,55 @@
   },
   "components": {
     "schemas": {
+      "AccountPaymentMethod": {
+        "type": "string",
+        "enum": [
+          "cash",
+          "card",
+          "bank_transfer"
+        ],
+        "title": "AccountPaymentMethod",
+        "description": "How a customer paid off debt."
+      },
+      "AccountView": {
+        "properties": {
+          "customer_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Money-Output"
+          },
+          "credit_limit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "available": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "balance",
+          "credit_limit",
+          "available"
+        ],
+        "title": "AccountView",
+        "description": "Where a customer stands."
+      },
       "Actor": {
         "properties": {
           "user": {
@@ -4207,32 +4631,6 @@
         ],
         "title": "AddressView",
         "description": "A delivery address."
-      },
-      "AdjustmentCreate": {
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/ItemKind"
-          },
-          "item_id": {
-            "$ref": "#/components/schemas/EntityId"
-          },
-          "change": {
-            "type": "integer",
-            "title": "Change"
-          },
-          "reason": {
-            "$ref": "#/components/schemas/Text"
-          }
-        },
-        "type": "object",
-        "required": [
-          "kind",
-          "item_id",
-          "change",
-          "reason"
-        ],
-        "title": "AdjustmentCreate",
-        "description": "A correction to one item's stock, with the reason for it."
       },
       "Amount": {
         "anyOf": [
@@ -4822,6 +5220,31 @@
         "title": "CountedItem",
         "description": "How many of one item were found."
       },
+      "CreditLimitUpdate": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount"
+        ],
+        "title": "CreditLimitUpdate",
+        "description": "A customer's new credit limit; ``null`` removes it."
+      },
       "CurrencyCode": {
         "type": "string",
         "pattern": "^[A-Z]{3}$"
@@ -4954,6 +5377,52 @@
         "title": "CustomerView",
         "description": "A customer with all their phones and addresses."
       },
+      "DebtorView": {
+        "properties": {
+          "customer_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "customer_name": {
+            "type": "string",
+            "title": "Customer Name"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Money-Output"
+          },
+          "credit_limit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_payment_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Payment At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "customer_name",
+          "balance",
+          "credit_limit",
+          "last_payment_at"
+        ],
+        "title": "DebtorView",
+        "description": "A customer who owes something, for collecting."
+      },
       "DeliveryAddressView": {
         "properties": {
           "address_id": {
@@ -5054,6 +5523,145 @@
       "EntityId": {
         "type": "string",
         "format": "uuid"
+      },
+      "EntryKind": {
+        "type": "string",
+        "enum": [
+          "charge",
+          "payment",
+          "adjustment"
+        ],
+        "title": "EntryKind",
+        "description": "What a ledger line is."
+      },
+      "EntryView": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "customer_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EntryKind"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money-Output"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountPaymentMethod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "override_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Reason"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "recorded_by": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voided At"
+          },
+          "voided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "void_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Void Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "customer_id",
+          "kind",
+          "amount",
+          "order_id",
+          "method",
+          "reference",
+          "note",
+          "override_reason",
+          "occurred_at",
+          "recorded_by",
+          "voided_at",
+          "voided_by",
+          "void_reason"
+        ],
+        "title": "EntryView",
+        "description": "One line of a customer's account."
       },
       "ExchangeCreate": {
         "properties": {
@@ -5503,6 +6111,16 @@
             ]
           },
           "override_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "credit_override_reason": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Reason"
@@ -6055,66 +6673,6 @@
         "title": "PasswordReset",
         "description": "An admin setting a new password; the user is logged out everywhere."
       },
-      "PaymentCreate": {
-        "properties": {
-          "supplier_id": {
-            "$ref": "#/components/schemas/EntityId"
-          },
-          "receipt_id": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EntityId"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "amount": {
-            "anyOf": [
-              {
-                "type": "number",
-                "exclusiveMinimum": 0.0
-              },
-              {
-                "type": "string"
-              }
-            ],
-            "title": "Amount"
-          },
-          "currency": {
-            "$ref": "#/components/schemas/CurrencyCode",
-            "default": "TRY"
-          },
-          "method": {
-            "$ref": "#/components/schemas/SupplierPaymentMethod"
-          },
-          "paid_on": {
-            "type": "string",
-            "format": "date",
-            "title": "Paid On"
-          },
-          "reference": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Reference"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "supplier_id",
-          "amount",
-          "method",
-          "paid_on"
-        ],
-        "title": "PaymentCreate",
-        "description": "Money paid to a supplier."
-      },
       "PaymentMethod": {
         "type": "string",
         "enum": [
@@ -6226,6 +6784,17 @@
         ],
         "title": "Platform",
         "description": "What a login is from."
+      },
+      "Positive": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0.0
+          },
+          {
+            "type": "string"
+          }
+        ]
       },
       "PriceCreate": {
         "properties": {
@@ -7093,6 +7662,78 @@
         "type": "string",
         "pattern": "^[a-z0-9_/-]{1,100}$"
       },
+      "StatementLine": {
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/EntryView"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Money-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry",
+          "balance"
+        ],
+        "title": "StatementLine",
+        "description": "A ledger line with the balance after it."
+      },
+      "StatementView": {
+        "properties": {
+          "customer_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "opening_balance": {
+            "$ref": "#/components/schemas/Money-Output"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "closing_balance": {
+            "$ref": "#/components/schemas/Money-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "since",
+          "until",
+          "opening_balance",
+          "lines",
+          "closing_balance"
+        ],
+        "title": "StatementView",
+        "description": "A customer's account over a period."
+      },
       "StockLevelView": {
         "properties": {
           "kind": {
@@ -7657,10 +8298,80 @@
           }
         ]
       },
-      "Void": {
+      "app__modules__accounts___schemas__AdjustmentCreate": {
+        "properties": {
+          "customer_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "amount",
+          "reason"
+        ],
+        "title": "AdjustmentCreate",
+        "description": "A correction: positive adds to what the customer owes."
+      },
+      "app__modules__accounts___schemas__PaymentCreate": {
+        "properties": {
+          "customer_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Positive"
+          },
+          "method": {
+            "$ref": "#/components/schemas/AccountPaymentMethod"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Text"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "amount",
+          "method"
+        ],
+        "title": "PaymentCreate",
+        "description": "A customer paying towards what they owe."
+      },
+      "app__modules__accounts___schemas__Void": {
         "properties": {
           "reason": {
-            "$ref": "#/components/schemas/Reason"
+            "$ref": "#/components/schemas/Text"
           }
         },
         "type": "object",
@@ -7668,7 +8379,7 @@
           "reason"
         ],
         "title": "Void",
-        "description": "Why a receipt or payment is voided."
+        "description": "Why a payment or adjustment is voided."
       },
       "app__modules__catalog___schemas__Name": {
         "type": "string",
@@ -7839,6 +8550,32 @@
         "maxLength": 200,
         "minLength": 1
       },
+      "app__modules__inventory___schemas__AdjustmentCreate": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ItemKind"
+          },
+          "item_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "change": {
+            "type": "integer",
+            "title": "Change"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "item_id",
+          "change",
+          "reason"
+        ],
+        "title": "AdjustmentCreate",
+        "description": "A correction to one item's stock, with the reason for it."
+      },
       "app__modules__inventory___views__MovementView": {
         "properties": {
           "id": {
@@ -7906,6 +8643,79 @@
         "type": "string",
         "maxLength": 200,
         "minLength": 1
+      },
+      "app__modules__purchasing___schemas__PaymentCreate": {
+        "properties": {
+          "supplier_id": {
+            "$ref": "#/components/schemas/EntityId"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/CurrencyCode",
+            "default": "TRY"
+          },
+          "method": {
+            "$ref": "#/components/schemas/SupplierPaymentMethod"
+          },
+          "paid_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Paid On"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "supplier_id",
+          "amount",
+          "method",
+          "paid_on"
+        ],
+        "title": "PaymentCreate",
+        "description": "Money paid to a supplier."
+      },
+      "app__modules__purchasing___schemas__Void": {
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "Void",
+        "description": "Why a receipt or payment is voided."
       },
       "app__modules__telephony___schemas__SettingsUpdate": {
         "properties": {

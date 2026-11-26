@@ -109,6 +109,8 @@ class OrderCompletion(BaseModel):
     payment_method: PaymentMethod | None = None
     override_reason: Reason | None = None
     """Needed if empties of another brand were accepted."""
+    credit_override_reason: Reason | None = None
+    """Needed if an on-account order takes the customer over their limit."""
 
     @model_validator(mode="after")
     def _unique(self) -> Self:
